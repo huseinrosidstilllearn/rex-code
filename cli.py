@@ -460,3 +460,9 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def tui_main():
+    """Launch the native Textual TUI."""
+    from rex.tui.app import main as tui_run
+    tui_run()

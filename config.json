@@ -80,5 +80,6 @@
     "api_model": "whisper-1",
     "base_url": null,
     "local_model": "base"
-  }
+  },
+  "tui_theme": "rex"
 }

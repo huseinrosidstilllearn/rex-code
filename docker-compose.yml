@@ -1,16 +1,16 @@
 # Rex Code — Docker Compose (Linux / macOS)
+# Runs the native TUI inside an interactive container.
 # Secrets are read from .env (never committed). config.json is mounted so you
 # can tweak providers/models without rebuilding.
 #
-#   docker compose up --build
-#   open http://localhost:8000
+#   docker compose run --rm rex-code
 
 services:
   rex-code:
     build: .
     container_name: rex-code
-    ports:
-      - "8000:8000"
+    stdin_open: true
+    tty: true
     env_file:
       - .env
     volumes:

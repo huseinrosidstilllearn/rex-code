@@ -1,10 +1,6 @@
-# FastAPI + Web Dashboard
-fastapi==0.141.1
-uvicorn[standard]==0.52.4
-websockets==16.1.1
+# Config & validation
 pydantic==2.13.5
-starlette==1.6.0
-python-multipart==0.0.32
+python-dotenv==1.2.3
 
 # Optional voice input (CLI mic capture)
 # sounddevice==0.5.1
@@ -18,11 +14,8 @@ google-genai==2.22.0
 openai==3.8.0
 httpx==0.28.1
 
-# CLI
-rich==15.0.0
-
-# Config & Env
-python-dotenv==1.2.3
+# Native TUI (Claude-Code-style terminal app)
+textual==0.86.3
 
 # IANA timezone database (zoneinfo) — required on Windows, optional elsewhere
 tzdata==2026.3

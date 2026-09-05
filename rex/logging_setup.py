@@ -4,7 +4,7 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 
-from rex.config import PROJECT_ROOT
+from rex.config import LOGS_DIR
 
 
 class JsonFormatter(logging.Formatter):
@@ -19,9 +19,8 @@ class JsonFormatter(logging.Formatter):
 def _logger():
     logger = logging.getLogger("rex")
     if not logger.handlers:
-        directory = PROJECT_ROOT / "logs"
-        directory.mkdir(exist_ok=True)
-        handler = RotatingFileHandler(directory / "rex.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        handler = RotatingFileHandler(LOGS_DIR / "rex.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
         handler.setFormatter(JsonFormatter())
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)

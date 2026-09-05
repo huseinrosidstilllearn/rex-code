@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from rex.config import PROJECT_ROOT
+from rex.config import SESSIONS_DIR
 
 
 SESSION_ID_RE = re.compile(r"^[0-9a-f]{32}$")
@@ -17,7 +17,7 @@ SECRET_KEYS = ("api_key", "apikey", "authorization", "password", "secret", "toke
 
 
 class SessionStore:
-    def __init__(self, directory: Path = PROJECT_ROOT / "sessions", max_content_chars: int = 8000):
+    def __init__(self, directory: Path = SESSIONS_DIR, max_content_chars: int = 8000):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.max_content_chars = max(100, int(max_content_chars))

@@ -5,22 +5,67 @@ Configuration manager for Rex Code.
 
 import os
 import json
+import sys
+import shutil
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Base paths
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-WORKSPACE_DIR = PROJECT_ROOT / "workspace"
-WORKFLOWS_DIR = PROJECT_ROOT / "workflows"
-CONFIG_FILE = PROJECT_ROOT / "config.json"
-ENV_FILE = PROJECT_ROOT / ".env"
+# ============================================================
+# Path resolution — works both in source and frozen (PyInstaller)
+# ============================================================
+
+def _get_data_dir() -> Path:
+    """
+    Return the persistent data directory.
+    - Source mode: project root (repo)
+    - Frozen (exe): %LOCALAPPDATA%\\RexCode (Windows) or ~/.local/share/rexcode (Unix)
+    """
+    if getattr(sys, "frozen", False):
+        # Running as PyInstaller bundle
+        if sys.platform == "win32":
+            base = Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+        else:
+            base = Path.home() / ".local" / "share"
+        data_dir = base / "RexCode"
+    else:
+        # Running from source
+        data_dir = Path(__file__).resolve().parent.parent
+    return data_dir
+
+DATA_DIR = _get_data_dir()
+
+# Derived paths (all under DATA_DIR)
+PROJECT_ROOT = DATA_DIR
+WORKSPACE_DIR = DATA_DIR / "workspace"
+WORKFLOWS_DIR = DATA_DIR / "workflows"
+CONFIG_FILE = DATA_DIR / "config.json"
+ENV_FILE = DATA_DIR / ".env"
+SESSIONS_DIR = DATA_DIR / "sessions"
+LOGS_DIR = DATA_DIR / "logs"
+PLUGINS_DIR = DATA_DIR / "plugins"
 
 # Ensure directories exist
-WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
-WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
+for d in (WORKSPACE_DIR, WORKFLOWS_DIR, SESSIONS_DIR, LOGS_DIR, PLUGINS_DIR):
+    d.mkdir(parents=True, exist_ok=True)
 
-# Load environment variables
-load_dotenv(ENV_FILE)
+# Load environment variables from .env (if exists)
+if ENV_FILE.exists():
+    load_dotenv(ENV_FILE)
+
+# Copy default config.json on first run (frozen mode only)
+if getattr(sys, "frozen", False) and not CONFIG_FILE.exists():
+    # Try to find bundled default config
+    bundled_config = Path(sys._MEIPASS) / "rex" / "config.json" if hasattr(sys, "_MEIPASS") else None
+    if bundled_config and bundled_config.exists():
+        shutil.copy2(bundled_config, CONFIG_FILE)
+    else:
+        # Fallback: create minimal config
+        _minimal = {
+            "active_provider": "gemini",
+            "active_model": "gemini-flash-latest",
+            "active_mode": "plan",
+        }
+        CONFIG_FILE.write_text(json.dumps(_minimal, indent=2))
 
 DEFAULT_CONFIG = {
     "active_provider": "gemini",

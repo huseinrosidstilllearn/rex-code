@@ -40,10 +40,8 @@ import sys
 from pathlib import Path
 from typing import Callable, Dict, List, Tuple
 
-from rex.config import PROJECT_ROOT, load_config, normalize_config
+from rex.config import PLUGINS_DIR, load_config, normalize_config
 from rex.logging_setup import log
-
-PLUGINS_DIR = PROJECT_ROOT / "plugins"
 
 
 def _discover_plugin_files() -> List[Path]:
