@@ -26,11 +26,38 @@ from rex.core import RexAgent, StepEvent
 from rex.anti_slop import detect_slop, clean_slop
 from rex.automation.n8n_builder import create_webhook_ai_workflow
 from rex.sessions import session_store
+from rex.cli_spinner import spinner, BRAND_GREEN
 
 console = Console()
 
+
+def step_callback(event: StepEvent) -> None:
+    """Rich callback for the ReAct step loop."""
+    action = event.action
+    thought = event.thought or ""
+    observation = event.observation or ""
+
+    lines = []
+    if action:
+        lines.append(f"[bold yellow]Action:[/bold yellow] {action}")
+    if thought:
+        lines.append(f"[bold blue]Thought:[/bold blue] {thought}")
+    if observation:
+        obs_short = observation[:500] + ("..." if len(observation) > 500 else "")
+        lines.append(f"[bold green]Observation:[/bold green] {obs_short}")
+
+    if lines:
+        console.print("\n".join(lines), style="dim")
+
+
+def tool_spinner(text: str):
+    """Context manager: shows a green dino spinner around a tool call."""
+    return spinner(console=console, text=text, color=BRAND_GREEN)
+
+
 def print_banner():
-    banner = r"""
+    with tool_spinner("Loading..."):
+        banner = r"""
 [bold cyan]  ____  _______  __   ____ ___  ____  _____ [/bold cyan]
 [bold cyan] |  _ \| ____\ \/ /  / ___/ _ \|  _ \| ____|[/bold cyan]
 [bold cyan] | |_) |  _|  \  /  | |  | | | | | | |  _|  [/bold cyan]
@@ -39,7 +66,7 @@ def print_banner():
 [dim]     Autonomous AI Coding & Workflow Agent  v1.0.0[/dim]
 [dim]     "You think it, Rex builds it."[/dim]
     """
-    console.print(banner)
+        console.print(banner)
 
 def show_help():
     table = Table(title="Daftar Perintah Rex Code", show_header=True, header_style="bold magenta")
@@ -213,7 +240,8 @@ def main():
                 console.print("[red]Session ID tidak ditemukan.[/red]")
             continue
         # Execute agent
-        response = agent.run(user_input, on_step=step_callback)
+        with tool_spinner("Thinking..."):
+            response = agent.run(user_input, on_step=step_callback)
         console.print()
 
         console.print(Panel(Markdown(response), title="ðŸ¦– Rex Code", border_style="cyan"))

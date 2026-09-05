@@ -9,4 +9,5 @@ __pycache__/
 sessions/
 logs/
 workspace/
+# docs/brand/*.png IS tracked intentionally (brand assets)
 workflows/

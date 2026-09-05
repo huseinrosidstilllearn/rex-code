@@ -13,6 +13,7 @@ CHECKS = [
     "test_sessions.py",
     "test_config.py",
     "test_sandbox.py",
+    "test_git_publish.py",
 ]
 
 

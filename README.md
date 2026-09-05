@@ -1,113 +1,263 @@
-# 🦖 REX CODE — Autonomous AI Coding & Workflow Agent
+<div align="center">
 
-Asisten coding otonom dan ahli otomatisasi pribadi Anda, dibuat khusus untuk membangun software dan alur kerja bisnis secara mandiri tanpa Anda perlu bisa coding.
+![Rex Code Banner](docs/brand/banner.png)
 
----
+# 🦖 Rex Code
 
-## 🚀 Cara Menjalankan Rex Code (Super Mudah)
+**Autonomous AI Coding & Workflow Agent**
 
-Anda punya **2 cara** untuk memakai Rex Code:
+You think it, Rex builds it. A resilient, secure agent that plans, builds, and debugs software while exporting ready-to-import n8n and Activepieces automations. Plan before you act, build when you approve, and stop the loop at any time without losing state.
 
-### Cara 1: Web Dashboard (Rekomendasi untuk Pemula)
-Cukup **klik dua kali** file:
-👉 `start_web.bat`
-Browser Anda akan otomatis terbuka ke `http://localhost:8000`. Anda bisa langsung mengobrol, memilih mode, dan melihat file yang dibuat secara visual.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](#-requirements--installation)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D4?logo=windows)](#-requirements--installation)
+[![Status](https://img.shields.io/badge/Foundation-Secure%20%26%20Resilient-22C55E)](#-security-by-default)
 
-### Cara 2: Terminal CLI (Gaya Claude Code)
-Cukup **klik dua kali** file:
-👉 `start_cli.bat`
-Jendela terminal modern akan terbuka dengan teks berwarna dan interaksi instan.
-
-CLI menyimpan percakapan lokal. Gunakan `/sessions`, `/new`, `/use <id>`, dan `/delete <id>` untuk mengelola sesi.
+</div>
 
 ---
 
-## 🎯 2 Mode Operasi Utama
+## 🖼️ Screenshots
 
-1. **📋 Mode PLAN:**
-   Rex Code hanya meneliti, merancang arsitektur, dan membuat rencana kerja tertulis tanpa menyentuh atau mengubah file apa pun. Anda bisa berdiskusi dan memeriksa rencananya terlebih dahulu.
-2. **🔨 Mode BUILD:**
-   Setelah Anda setuju, Rex Code mulai mengeksekusi secara mandiri:
-   - Menulis file kode lengkap ke folder `./workspace/`.
-   - Menginstal paket dan menjalankan perintah di terminal.
-   - **Auto-Debug:** Jika ada error/bug saat dijalankan, Rex Code otomatis membaca pesan error, memperbaiki kodenya, dan mengujinya kembali sampai berhasil!
+> Drop your screenshots into `docs/screenshots/` and reference them here. The placeholders below are ready to be replaced.
 
----
+| File | Description |
+| --- | --- |
+| `docs/screenshots/dashboard-overview.png` | Full dashboard: chat, Plan/Build toggle, provider selector, file explorer, n8n tab. |
+| `docs/screenshots/plan-mode.png` | PLAN mode output: architecture notes, file tree, safe read-only preview. |
+| `docs/screenshots/build-mode.png` | BUILD mode output: tool calls, file writes, terminal execution, auto-debug loop. |
+| `docs/screenshots/cli-session.png` | CLI session with `/sessions`, `/models`, and `/n8n` commands. |
 
-## ⚡ Alur Otomasi n8n & Activepieces (1-Click Import)
-
-Rex Code bisa membuat file alur kerja otomasi dalam format `.json` resmi untuk **n8n** dan **Activepieces**:
-* File akan disimpan di folder `./workflows/`.
-* Buka n8n atau Activepieces di browser Anda, klik **Import**, dan alur kerja langsung aktif tanpa perlu merakit node dari nol.
-* Rex Code juga bisa menuliskan kode custom JavaScript / Python di dalam *Code Node* secara otomatis.
-
----
-
-## 🛡️ Integrasi No-AI-Slop
-
-Rex Code mematuhi prinsip anti-slop:
-* Nol kata klise AI (*delve, foster, leverage, streamline, cutting-edge, game changer, tapestry*).
-* Tanpa basa-basi pembuka (*"Here's the thing"*) atau penutup rangkuman (*"In conclusion"*).
-* Teks aplikasi dan kode yang dihasilkan natural dan manusiawi.
-* Perintah `/anti-slop` di terminal untuk mengaudit tulisan draf Anda.
-
----
-
-## 📁 Struktur Direktori
-
-* `workspace/` : Tempat Rex Code membuat file aplikasi dan kode proyek Anda.
-* `workflows/` : Tempat Rex Code mengekspor file alur kerja JSON untuk n8n dan Activepieces.
-* `sessions/` : Riwayat percakapan dashboard dalam JSON lokal; diabaikan Git.
-* `config.json` : Pengaturan model aktif, provider, dan mode.
-* `.env` : Tempat menyimpan API Key Anda dengan aman.
-
----
-
-## Menambah Provider OpenAI-Compatible
-
-Tambahkan metadata provider ke objek `providers` di `config.json`:
-
-```json
-"token_murah": {
-  "name": "Token Murah",
-  "type": "openai_compatible",
-  "base_url": "https://alamat-provider.example/v1",
-  "api_key_env": "TOKEN_MURAH_API_KEY",
-  "model": "nama-model",
-  "available_models": ["nama-model"]
-}
+```markdown
+![Dashboard overview](docs/screenshots/dashboard-overview.png)
+![Plan mode](docs/screenshots/plan-mode.png)
+![Build mode](docs/screenshots/build-mode.png)
+![CLI session](docs/screenshots/cli-session.png)
 ```
 
-Simpan token hanya di `.env`, bukan `config.json`:
+---
 
-```env
-TOKEN_MURAH_API_KEY=isi-token-anda
-```
+## ✨ What Rex Code Can Do
 
-Restart Rex Code. Provider dan model otomatis muncul di CLI `/models` dan pemilih model dashboard. `base_url` harus mencakup `/v1` bila layanan mensyaratkannya.
+- **Two modes, one brain.** PLAN mode researches and writes a plan without touching files. BUILD mode writes code, runs commands, and auto-debugs until it works.
+- **ReAct loop with self-healing.** Every tool result feeds the next thought. Terminal errors trigger automatic code fixes and re-runs.
+- **Multi-provider.** Switch between Google Gemini and OpenAI-compatible APIs (9router, OmniRoute/OpenRouter, custom, local Ollama) without changing prompts.
+- **Cooperative abort.** Press **Stop** in the dashboard or interrupt in the CLI. The current tool may finish, but the next step never runs.
+- **n8n & Activepieces export.** Generate webhook-AI workflow JSON in `workflows/` and import it directly into your automation platform.
+- **Anti-slop guardrail.** Strips AI clichés (`leverage`, `tapestry`, `game changer`) and keeps output natural.
+- **Local sessions.** Conversation history survives browser refresh and CLI restarts. Secrets and long outputs are redacted before saving.
+- **Hard security rails.** Path traversal, sensitive files, and dangerous shell commands are blocked. Secrets never enter child processes.
+
+---
+## 🎬 One-Liner Start
+
+Double-click a launcher. That is the whole story.
+
+| Launcher | What it does |
+| --- | --- |
+| `start_web.bat` | Opens the FastAPI dashboard at `http://localhost:8000` and your browser. |
+| `start_cli.bat` | Opens a Claude-Code-style terminal with rich formatting and instant responses. |
+
+Both scripts use the local `.venv` Python, so no global installation is required.
 
 ---
 
-## Guardrail Terminal
+## 🛠️ Requirements & Installation
 
-Mode Build menjalankan terminal dari `workspace/`. Perintah sistem berbahaya, akses `.env`/`config.json`, path absolut, dan traversal `../` diblokir. Secret environment tidak diteruskan ke child process. Atur batas melalui `terminal_timeout_sec`, `terminal_output_max_chars`, dan `command_allowlist` di `config.json`.
+Rex Code runs entirely on your machine. It targets **Windows** (PowerShell) with **Python 3.10+**.
 
-Guardrail ini bukan sandbox OS penuh. Untuk menjalankan kode pihak ketiga yang tidak dipercaya, gunakan container atau akun Windows terbatas.
+1. **Clone the repository**
+   ```powershell
+   git clone https://github.com/husein-rexcode/rex-code.git
+   cd "rex-code"
+   ```
+2. **Create a virtual environment** (one-time, ~10 seconds)
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   ```
+3. **Configure providers** — copy `config.example.json` → `config.json` and fill in your API keys (Gemini, 9router, OpenAI-compatible, or local Ollama).
+4. **Launch**
+   - Dashboard: `.\start_web.bat` → open <http://localhost:8000>
+   - CLI: `.\start_cli.bat` → interactive shell
 
-## Riwayat Percakapan
+> Secrets are read from `config.json` and the `secrets/` directory. **Never commit these files.** The repository ships a pre-wired `.gitignore` that excludes them.
 
-Dashboard menyimpan percakapan lokal per sesi dan memulihkannya setelah browser di-refresh. Buat, pilih, atau hapus sesi lewat panel kiri. `max_history_messages` di `config.json` membatasi jumlah pesan terakhir yang dikirim kembali ke model. Secret pada field sensitif serta output panjang diredaksi atau dipotong sebelum disimpan.
+---
 
-## Streaming Respons
+## 🚀 Usage
 
-Dashboard menampilkan respons Gemini dan provider OpenAI-compatible secara bertahap saat model menghasilkannya. Atur `stream_enabled` ke `false` di `config.json` untuk kembali ke respons non-streaming. Router yang tidak mendukung SSE otomatis memakai respons JSON biasa.
+### 1. Dashboard (FastAPI + Browser)
 
-Tombol **Stop** meminta pembatalan kooperatif. Request provider aktif mungkin selesai lebih dulu, tetapi tool atau langkah berikutnya tidak dijalankan. Statistik jumlah pesan dan karakter tersimpan tersedia sebagai tooltip deskripsi mode.
+```powershell
+python app.py
+```
 
-## Pemeriksaan Lokal
+Visit `http://localhost:8000`. The UI exposes:
 
-Jalankan semua self-check tanpa layanan eksternal:
+| Tab | Purpose |
+| --- | --- |
+| **Chat** | Streaming conversation with markdown rendering and copy-as-markdown. |
+| **Tools** | Live trace of every tool call (read/write/edit/run/git). |
+| **Files** | Workspace tree with upload, download, delete. |
+| **n8n** | Generate & download webhook-AI workflow JSON. |
+| **Sessions** | Resume, rename, or delete saved conversations. |
 
-```bash
+### 2. CLI (Claude Code-style)
+
+```powershell
+python cli.py
+```
+
+Useful slash commands:
+
+| Command | Effect |
+| --- | --- |
+| `/plan` | Switch to PLAN (read-only) mode. |
+| `/build` | Switch to BUILD (autonomous) mode. |
+| `/models` | Pick provider + model without restarting. |
+| `/n8n` | Generate an n8n workflow template. |
+| `/anti-slop` | Audit & clean text from AI clichés. |
+| `/files` | List files in the workspace. |
+| `/sessions` `/new` `/use <id>` `/delete <id>` | Session management. |
+| `/help` `/exit` | Self-explanatory. |
+
+While a tool is running you will see a custom **green dinosaur spinner** (`BRAND_GREEN #22C55E`) to confirm the agent is alive.
+
+---
+
+## 🏗️ Architecture
+
+<img src="docs/brand/logo-main.png" width="140" align="right" alt="Rex Code logo">
+
+Rex Code is structured as a thin orchestration layer over a ReAct loop, with strict boundaries between planning and execution.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  CLI (cli.py)         FastAPI Dashboard (app.py)            │
+│        ↓                        ↓                            │
+│  RexAgent.run() — ReAct loop with StepEvent callbacks       │
+│        ↓                                                    │
+│  Tool layer (rex/tools.py)                                  │
+│  ├── read_file / write_file / edit_file / delete_file       │
+│  ├── list_dir / search_files / search_content               │
+│  ├── run_command (sandboxed via ALWAYS_BLOCKED_COMMANDS)    │
+│  ├── git_status / git_publish (secret-scan guarded)         │
+│  └── session_store (rex/sessions.py)                        │
+│        ↓                                                    │
+│  Provider router (rex/providers/) — Gemini, 9router,        │
+│  OpenAI-compatible, local Ollama                             │
+│        ↓                                                    │
+│  Anti-slop filter (rex/anti_slop.py) — strips AI clichés    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Key invariants**
+
+- **Mode gate** — every write/run tool checks `get_active_mode()` and refuses to execute in PLAN.
+- **Path safety** — `resolve_path()` blocks `..` traversal; `_is_sensitive()` rejects `.env`, `*.pem`, `*.key`, etc.
+- **Secret redaction** — sessions are sanitised before persistence.
+- **Cooperative abort** — `Stop` flag in dashboard / `Ctrl+C` in CLI sets a flag the ReAct loop checks between steps.
+
+---
+
+## 🛡️ Security by Default
+
+| Threat | Defense | Code |
+| --- | --- | --- |
+| Path traversal (`../etc/passwd`) | `resolve_path` + `is_relative_to` | `rex/tools.py` |
+| Editing `.env` / `*.pem` / `*.key` | `_is_sensitive()` allow-list | `rex/tools.py` |
+| `rm -rf /`, `format C:`, `Invoke-Expression` | `ALWAYS_BLOCKED_COMMANDS` regex | `rex/tools.py` |
+| Leaking secrets in git history | `git_publish` scans staged diff for `ghp_*`, `AIza*`, `BEGIN PRIVATE KEY`, etc. | `rex/tools.py` |
+| Pushing too many files at once | `git_publish_max_files` (default 50) | `rex/config.py` |
+| API keys landing in logs | `secrets/` dir is `.gitignore`d; outputs are redacted on write | `.gitignore`, `rex/sessions.py` |
+
+Default secret patterns in `DEFAULT_SECRET_PATTERNS`:
+
+```python
+DEFAULT_SECRET_PATTERNS = (
+    r"ghp_[A-Za-z0-9]{20,}",          # GitHub personal token
+    r"github_pat_[A-Za-z0-9_]{20,}",  # GitHub fine-grained token
+    r"AIza[A-Za-z0-9_-]{30,}",        # Google API key
+    r"sk-[A-Za-z0-9]{20,}",           # OpenAI / Anthropic key
+    r"BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY",
+)
+```
+
+You can extend this list in `config.json` under `git_publish_block_patterns`.
+
+---
+
+## 🧪 Self-Checks
+
+Run the full pre-push audit:
+
+```powershell
 python run_all_checks.py
 ```
+
+It chains 7 mock-driven test suites:
+
+| Suite | What it verifies |
+| --- | --- |
+| `test_foundations.py` | Config loading, mode toggling, workspace bootstrap. |
+| `test_streaming.py` | SSE chunks, cancel signal, partial JSON. |
+| `test_openai_compatible.py` | 9router / OmniRoute / Ollama wire formats. |
+| `test_sessions.py` | Create / resume / delete + secret redaction. |
+| `test_config.py` | `config.json` schema validation. |
+| `test_sandbox.py` | Path traversal, command blocking, sensitive files. |
+| `test_git_publish.py` | 10 scenarios: plan/empty/no-origin/no-changes/secret/too-many/success. |
+
+A green run means the foundation is safe to push.
+
+---
+
+## 🧰 Available Tools
+
+The agent (and the dashboard's "Tools" tab) can invoke any of these:
+
+| Tool | Mode | Purpose |
+| --- | --- | --- |
+| `read_file` | PLAN & BUILD | Read a workspace file. |
+| `write_file` | BUILD only | Create / overwrite a file. |
+| `edit_file` | BUILD only | Surgical text replacement. |
+| `list_dir` | PLAN & BUILD | Tree of the workspace. |
+| `search_files` | PLAN & BUILD | Find files by name. |
+| `search_content` | PLAN & BUILD | Grep workspace with line numbers. |
+| `delete_file` | BUILD only | Remove a single file. |
+| `run_command` | BUILD only | Run a PowerShell command in a sandbox. |
+| `git_status` | PLAN & BUILD | Short + branch git summary. |
+| `git_publish` | BUILD only | Stage → secret-scan → commit → push. |
+
+The full schema is exported via `TOOL_DEFINITIONS` in `rex/tools.py` for any OpenAI-compatible LLM.
+
+---
+
+## 🗺️ Roadmap
+
+- [x] Secure foundation: mode gate, path sandbox, sensitive-file block.
+- [x] Multi-provider router (Gemini + OpenAI-compatible + local).
+- [x] Streaming chat with cooperative abort.
+- [x] Session persistence with secret redaction.
+- [x] n8n & Activepieces workflow export.
+- [x] `git_publish` tool with secret pre-scan.
+- [x] Brand assets + dinosaur spinner.
+- [ ] Voice input (Whisper) for CLI & dashboard.
+- [ ] Plugin system for community-contributed tools.
+- [ ] Docker image for Linux / macOS.
+- [ ] Webhook trigger: run Rex from CI on PR events.
+
+---
+
+## 📄 License & Credits
+
+<img src="docs/brand/logo-text.png" width="160" alt="Rex Code">
+
+© 2026 Husein AI Project. Released under the **MIT License** — see `LICENSE`.
+
+Built with:
+
+- [Rich](https://github.com/Textualize/rich) — terminal rendering.
+- [FastAPI](https://fastapi.tiangolo.com/) — async dashboard.
+- [Pydantic](https://docs.pydantic.dev/) — config validation.
+- The **Rex Code dinosaur** mascot is original artwork by the Husein AI Project.

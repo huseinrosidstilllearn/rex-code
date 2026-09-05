@@ -276,6 +276,127 @@ def run_command(command: str) -> str:
     except Exception as e:
         return f"Error eksekusi: {str(e)}"
 
+
+# --- Git Auto-Publish Tools -------------------------------------------------
+
+DEFAULT_SECRET_PATTERNS = (
+    r"ghp_[A-Za-z0-9]{20,}",
+    r"github_pat_[A-Za-z0-9_]{20,}",
+    r"AIza[A-Za-z0-9_-]{30,}",
+    r"sk-[A-Za-z0-9]{20,}",
+    r"BEGIN (RSA |OPENSSH |EC )?PRIVATE KEY",
+)
+
+
+def _run_git(args, cwd, timeout):
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+
+
+def git_status() -> str:
+    """Ringkasan status git: branch, perubahan staged/unstaged/untracked. Aktif di PLAN & BUILD."""
+    try:
+        result = _run_git(["status", "--short", "--branch"], cwd=Path.cwd(), timeout=15)
+    except subprocess.TimeoutExpired:
+        return "Error: git status timeout."
+    except FileNotFoundError:
+        return "Error: git tidak ditemukan di PATH."
+    if result.returncode != 0:
+        return f"Error git status: {result.stderr.strip() or 'unknown'}"
+    return result.stdout.strip() or "Working tree bersih, tidak ada perubahan."
+
+
+def git_publish(message: str) -> str:
+    """Commit semua perubahan lalu push ke origin/HEAD (Hanya Mode Build)."""
+    if get_active_mode() == "plan":
+        return "TIDAK DIIZINKAN: git_publish hanya di Mode Build."
+
+    if not isinstance(message, str) or not message.strip():
+        return "Error: pesan commit kosong."
+
+    cfg = load_config()
+    if not cfg.get("git_publish_enabled", True):
+        return "DIBLOKIR: git_publish_enabled=false di config.json."
+
+    repo_root = Path(__file__).resolve().parent.parent
+    push_timeout = max(10, int(cfg.get("git_publish_timeout_sec", 120)))
+    max_files = max(1, int(cfg.get("git_publish_max_files", 50)))
+    patterns = tuple(cfg.get("git_publish_block_patterns", list(DEFAULT_SECRET_PATTERNS)))
+    if not isinstance(patterns, (list, tuple)):
+        patterns = DEFAULT_SECRET_PATTERNS
+
+    # 1. Pastikan ada remote origin
+    try:
+        remote = _run_git(["remote", "get-url", "origin"], cwd=repo_root, timeout=10)
+    except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
+        return f"Error: {exc}"
+    if remote.returncode != 0:
+        return "Error: remote 'origin' belum dikonfigurasi."
+
+    # 2. Pastikan ada perubahan
+    try:
+        status = _run_git(["status", "--porcelain"], cwd=repo_root, timeout=10)
+    except subprocess.TimeoutExpired:
+        return "Error: git status timeout."
+    if status.returncode != 0:
+        return f"Error git status: {status.stderr.strip()}"
+    if not status.stdout.strip():
+        return "Tidak ada perubahan untuk di-commit."
+
+    changed_files = [line for line in status.stdout.splitlines() if line.strip()]
+    if len(changed_files) > max_files:
+        return (
+            f"DIBLOKIR: {len(changed_files)} file berubah, melebihi batas "
+            f"git_publish_max_files={max_files}. Commit manual jika ini disengaja."
+        )
+
+    # 3. Stage semua
+    add = _run_git(["add", "-A"], cwd=repo_root, timeout=30)
+    if add.returncode != 0:
+        return f"Error git add: {add.stderr.strip()}"
+
+    # 4. Scan secret SEBELUM commit (file staged)
+    diff_check = _run_git(
+        ["diff", "--cached", "--no-color"],
+        cwd=repo_root,
+        timeout=30,
+    )
+    if diff_check.returncode != 0:
+        return f"Error git diff: {diff_check.stderr.strip()}"
+    for pattern in patterns:
+        match = re.search(pattern, diff_check.stdout, re.IGNORECASE)
+        if match:
+            return f"BLOKIR KEAMANAN: pola '{pattern}' terdeteksi di staged diff: {match.group(0)[:40]}..."
+
+    # 5. Commit
+    safe_message = message.strip().replace("\n", " ")[:200]
+    commit = _run_git(
+        ["commit", "-m", safe_message],
+        cwd=repo_root,
+        timeout=30,
+    )
+    if commit.returncode != 0:
+        return f"Error git commit: {commit.stderr.strip() or commit.stdout.strip()}"
+
+    # 6. Push
+    push = _run_git(
+        ["push", "origin", "HEAD"],
+        cwd=repo_root,
+        timeout=push_timeout,
+    )
+    if push.returncode != 0:
+        return f"Error git push: {push.stderr.strip() or push.stdout.strip()}"
+
+    push_url = remote.stdout.strip()
+    return f"Berhasil publish '{safe_message}' -> {push_url}"
+
+
+
 # Schema definitions for LLM Tool Calling
 TOOL_DEFINITIONS = [
     {
@@ -359,6 +480,22 @@ TOOL_DEFINITIONS = [
             },
             "required": ["command"]
         }
+    },
+    {
+        "name": "git_status",
+        "description": "Melihat ringkasan status git (branch, staged/unstaged/untracked). Aktif di PLAN & BUILD.",
+        "parameters": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "git_publish",
+        "description": "Commit semua perubahan lalu push ke origin (Hanya Mode Build). Memindai diff staged untuk pola rahasia sebelum commit.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "message": {"type": "string", "description": "Pesan commit (wajib, singkat & deskriptif)"}
+            },
+            "required": ["message"]
+        }
     }
 ]
 
@@ -371,4 +508,6 @@ TOOL_REGISTRY = {
     "search_content": search_content,
     "delete_file": delete_file,
     "run_command": run_command,
+    "git_status": git_status,
+    "git_publish": git_publish,
 }
