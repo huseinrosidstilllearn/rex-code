@@ -15,10 +15,13 @@ from typing import Dict, Any
 # Ensure project root in sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, UploadFile, File, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
+
+from rex.voice import transcribe_audio, engine_status, get_voice_config, VoiceTranscriptionError
+from rex.webhooks import handle_github_event, webhook_settings, WebhookError
 
 from rex.config import (
     load_config, save_config, get_active_mode, set_active_mode,
@@ -101,6 +104,40 @@ async def get_file_content(path: str, source: str = "workspace"):
         raise HTTPException(status_code=404, detail="File tidak ditemukan")
     with open(target, "r", encoding="utf-8", errors="ignore") as f:
         return {"content": f.read(), "filename": target.name}
+
+@app.post("/api/webhook/github")
+async def github_webhook(request: Request):
+    """GitHub webhook receiver: run Rex Code on PR events (see rex/webhooks.py)."""
+    if not webhook_settings().get("enabled", True):
+        return JSONResponse({"status": "disabled"}, status_code=404)
+    payload_bytes = await request.body()
+    signature = request.headers.get("X-Hub-Signature-256", "")
+    event = request.headers.get("X-GitHub-Event", "")
+    try:
+        result = await asyncio.to_thread(handle_github_event, event, payload_bytes, signature)
+    except WebhookError as exc:
+        return JSONResponse({"detail": str(exc)}, status_code=403)
+    return JSONResponse(result)
+
+@app.get("/api/voice/config")
+async def voice_config():
+    cfg = get_voice_config()
+    return {"engine": cfg["engine"], "engines": engine_status()}
+
+@app.post("/api/transcribe")
+async def transcribe(file: UploadFile = File(...)):
+    """Transcribe an uploaded voice note (webm/ogg/wav/mp3) to text."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="File audio kosong")
+    mime_type = file.content_type or "audio/webm"
+    try:
+        text = await asyncio.to_thread(transcribe_audio, data, mime_type)
+    except VoiceTranscriptionError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Transkripsi gagal. Periksa logs/rex.log dan konfigurasi voice di config.json.")
+    return {"text": text, "engine": get_voice_config()["engine"]}
 
 @app.post("/api/anti-slop/audit")
 async def audit_anti_slop(req: SlopAuditRequest):

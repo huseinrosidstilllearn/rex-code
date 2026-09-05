@@ -11,6 +11,7 @@ import unicodedata
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from rex.config import WORKSPACE_DIR, WORKFLOWS_DIR, get_active_mode, load_config
+from rex.shell import build_command_argv
 
 SENSITIVE_FILENAMES = {".env", "config.json", "credentials.json", "credential.json", "secrets.json"}
 SENSITIVE_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".keystore"}
@@ -186,8 +187,14 @@ SECRET_ENV_MARKERS = ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "PRIVATE_KEY", "
 ALWAYS_BLOCKED_COMMANDS = (
     (r"(^|[;&|]\s*)(iex|invoke-expression)\b", "eksekusi PowerShell dinamis"),
     (r"\s-(encodedcommand|enc|e)\b", "perintah PowerShell terenkripsi"),
-    (r"\b(set-executionpolicy|stop-computer|restart-computer|shutdown)\b", "perubahan sistem"),
+    (r"\b(set-executionpolicy|stop-computer|restart-computer|shutdown|poweroff|reboot)\b", "perubahan sistem"),
     (r"\b(format-volume|clear-disk|initialize-disk|cipher\s+/w)\b", "operasi disk destruktif"),
+    (r"\brm\s+-r[f]?\s+[/~]", "penghapusan direktori sistem"),
+    (r"\bsudo\b", "eskalasi privilege"),
+    (r"\bdd\s+if=/dev/zero", "penimpaan disk"),
+    (r"\bchmod\s+-R\s+777\s+/", "permission massal di root"),
+    (r"\b(curl|wget)\b[^;&|]*\|\s*(?:sudo\s+)?(?:ba)?sh\b", "eksekusi skrip jarak jauh"),
+    (r":\(\)\s*\{\s*:\|:&\s*\}\s*;", "fork bomb"),
     (r"\breg(?:\.exe)?\s+delete\b", "penghapusan registry"),
     (r"\bnet(?:\.exe)?\s+(user|localgroup)\b", "perubahan akun sistem"),
     (r"(?:\$env:|\benv:)[^\s;&|]*(api[_-]?key|token|secret|password|private[_-]?key|credential)", "akses secret environment"),
@@ -250,7 +257,7 @@ def run_command(command: str) -> str:
     try:
         # Execute in workspace directory
         res = subprocess.run(
-            ["powershell", "-Command", command],
+            build_command_argv(command),
             cwd=WORKSPACE_DIR,
             capture_output=True,
             text=True,

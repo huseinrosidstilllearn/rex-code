@@ -13,7 +13,115 @@ document.addEventListener("DOMContentLoaded", () => {
   loadSessions();
   refreshFiles();
   connectWebSocket();
+  initVoice();
 });
+
+// ---------------------------------------------------------------------------
+// Voice input (Whisper) — record from the mic, transcribe via /api/transcribe
+// ---------------------------------------------------------------------------
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+let isTranscribing = false;
+
+async function initVoice() {
+  const micBtn = document.getElementById("mic-btn");
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    micBtn.classList.add("hidden");
+    return;
+  }
+  try {
+    const res = await fetch("/api/voice/config");
+    const cfg = await res.json();
+    const engines = cfg.engines || {};
+    const anyReady = Object.values(engines).some(Boolean);
+    if (!anyReady) {
+      micBtn.title = "Voice input: isi GEMINI_API_KEY atau OPENAI_API_KEY di .env (atau pip install faster-whisper)";
+      micBtn.classList.add("opacity-40");
+    }
+  } catch (err) {
+    console.error("Gagal memuat konfigurasi voice:", err);
+  }
+}
+
+function setMicState(state) {
+  const micBtn = document.getElementById("mic-btn");
+  const micLabel = document.getElementById("mic-label");
+  const icon = micBtn.querySelector("i");
+  if (state === "recording") {
+    micBtn.className = "bg-red-700 hover:bg-red-600 border border-red-500 text-white px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 transition animate-pulse";
+    micLabel.textContent = "Berhenti";
+    icon.setAttribute("data-lucide", "square");
+  } else if (state === "transcribing") {
+    micBtn.className = "bg-slate-800 border border-slate-700 text-slate-300 px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 transition opacity-60";
+    micBtn.disabled = true;
+    micLabel.textContent = "Menyadap...";
+    icon.setAttribute("data-lucide", "loader-2");
+    icon.classList.add("animate-spin");
+  } else {
+    micBtn.className = "bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 transition";
+    micBtn.disabled = false;
+    micLabel.textContent = "Suara";
+    icon.setAttribute("data-lucide", "mic");
+    icon.classList.remove("animate-spin");
+  }
+  lucide.createIcons();
+}
+
+function pickMimeType() {
+  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
+  return candidates.find(type => MediaRecorder.isTypeSupported(type)) || "";
+}
+
+async function toggleRecording() {
+  if (isRecording) {
+    mediaRecorder.stop();
+    return;
+  }
+  if (isTranscribing) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mimeType = pickMimeType();
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    audioChunks = [];
+    mediaRecorder.ondataavailable = event => {
+      if (event.data.size > 0) audioChunks.push(event.data);
+    };
+    mediaRecorder.onstop = () => {
+      stream.getTracks().forEach(track => track.stop());
+      const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+      sendAudioForTranscription(blob);
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    setMicState("recording");
+  } catch (err) {
+    alert("Tidak dapat mengakses mikrofon. Periksa izin browser.");
+  }
+}
+
+async function sendAudioForTranscription(blob) {
+  isRecording = false;
+  isTranscribing = true;
+  setMicState("transcribing");
+  try {
+    const form = new FormData();
+    const ext = blob.type.includes("mp4") ? "mp4" : "webm";
+    form.append("file", blob, `voice.${ext}`);
+    const res = await fetch("/api/transcribe", { method: "POST", body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Transkripsi gagal");
+    const input = document.getElementById("chat-input");
+    input.value = (input.value ? input.value + " " : "") + data.text;
+    input.focus();
+  } catch (err) {
+    console.error(err);
+    alert("Gagal menyadap suara: " + err.message);
+  } finally {
+    isTranscribing = false;
+    setMicState("idle");
+  }
+}
 
 // Load configuration
 async function loadConfig() {

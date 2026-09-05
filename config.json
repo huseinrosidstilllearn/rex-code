@@ -72,5 +72,13 @@
         "qwen2.5-coder"
       ]
     }
+  },
+  "voice": {
+    "engine": "auto",
+    "model": "gemini-2.5-flash",
+    "api_key_env": "OPENAI_API_KEY",
+    "api_model": "whisper-1",
+    "base_url": null,
+    "local_model": "base"
   }
 }

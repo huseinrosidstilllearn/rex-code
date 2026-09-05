@@ -9,6 +9,7 @@ import threading
 from rex.config import load_config, get_active_mode, set_active_mode
 from rex.prompts import PLAN_MODE_PROMPT, BUILD_MODE_PROMPT
 from rex.tools import TOOL_DEFINITIONS, TOOL_REGISTRY
+from rex.plugins import effective_tool_definitions, effective_tool_registry
 from rex.providers.manager import get_llm_provider
 from rex.providers.gemini import GeminiProvider
 from rex.anti_slop import clean_slop
@@ -114,6 +115,8 @@ class RexAgent:
 
         # Branch 2: Universal Router Provider (9router, OmniRoute, Ollama via ReAct loop)
         else:
+            tools_definitions = effective_tool_definitions()
+            tools_registry = effective_tool_registry()
             max_steps = cfg.get("max_steps", 20)
             self._remember({"role": "user", "content": user_input})
             current_step = 0
@@ -128,7 +131,7 @@ class RexAgent:
                 if cfg.get("stream_enabled", True) and hasattr(self.provider, "chat_stream"):
                     resp = None
                     for event in self.provider.chat_stream(
-                        messages=self.messages, system_prompt=system_prompt, tools=TOOL_DEFINITIONS
+                        messages=self.messages, system_prompt=system_prompt, tools=tools_definitions
                     ):
                         if self._abort.is_set():
                             final_response = "Proses dibatalkan oleh pengguna."
@@ -144,7 +147,7 @@ class RexAgent:
                     resp = self.provider.chat(
                         messages=self.messages,
                         system_prompt=system_prompt,
-                        tools=TOOL_DEFINITIONS
+                        tools=tools_definitions
                     )
 
                 if resp.has_tool_calls():
@@ -170,9 +173,9 @@ class RexAgent:
                             on_step(StepEvent("tool_call", {"name": func_name, "args": args}))
                         log.info("tool_call name=%s session=%s", func_name, self.session_id or "none")
 
-                        if func_name in TOOL_REGISTRY:
+                        if func_name in tools_registry:
                             try:
-                                result = TOOL_REGISTRY[func_name](**args)
+                                result = tools_registry[func_name](**args)
                             except Exception as e:
                                 result = f"Exception saat eksekusi {func_name}: {str(e)}"
                         else:

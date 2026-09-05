@@ -27,6 +27,7 @@ from rex.anti_slop import detect_slop, clean_slop
 from rex.automation.n8n_builder import create_webhook_ai_workflow
 from rex.sessions import session_store
 from rex.cli_spinner import spinner, BRAND_GREEN
+from rex.voice import transcribe_audio, VoiceTranscriptionError
 
 console = Console()
 
@@ -77,6 +78,7 @@ def show_help():
     table.add_row("/models", "Ganti Model atau Provider (Gemini, 9router, OmniRoute, Local)")
     table.add_row("/n8n", "Generate template workflow otomasi n8n (JSON siap import)")
     table.add_row("/anti-slop", "Audit dan bersihkan teks dari buzzword & pola klise AI")
+    table.add_row("/voice", "Voice input (Whisper): rekam suara, langsung jadi instruksi")
     table.add_row("/files", "Lihat daftar file di workspace/")
     table.add_row("/reset", "Reset riwayat percakapan")
     table.add_row("/sessions", "Lihat sesi lokal")
@@ -130,6 +132,59 @@ def handle_anti_slop_audit():
         if changes:
             console.print("\n[bold cyan]Hasil Rekomendasi Bersih:[/bold cyan]")
             console.print(f"[white]{cleaned}[/white]")
+
+def handle_voice_input() -> str:
+    """Record microphone audio, transcribe with Whisper, return the text."""
+    try:
+        import sounddevice as sd
+        import numpy as np
+    except ImportError:
+        console.print("[red]Voice input membutuhkan package tambahan.[/red] Jalankan: [cyan]pip install sounddevice numpy[/cyan]")
+        return ""
+
+    sample_rate = 16000
+    chunks = []
+
+    def callback(indata, frames, time_info, status):
+        chunks.append(indata.copy())
+
+    console.print("[cyan]🎤 Merekam... Tekan Enter untuk berhenti. [/cyan]")
+    try:
+        with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16", callback=callback):
+            console.input()
+    except Exception as exc:
+        console.print(f"[red]Gagal mengakses mikrofon: {exc}[/red]")
+        return ""
+
+    if not chunks:
+        console.print("[dim]Tidak ada audio terekam.[/dim]")
+        return ""
+
+    import io
+    import wave
+
+    audio = np.concatenate(chunks)
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(audio.tobytes())
+
+    try:
+        with tool_spinner("Menyadap suara (Whisper)..."):
+            text = transcribe_audio(buffer.getvalue(), "audio/wav")
+    except VoiceTranscriptionError as exc:
+        console.print(f"[red]{exc}[/red]")
+        return ""
+
+    text = text.strip()
+    if not text:
+        console.print("[dim]Tidak ada teks terdeteksi dari rekaman.[/dim]")
+        return ""
+    console.print(f"[dim]Transkripsi:[/dim] {text}")
+    return text
+
 
 def step_callback(event: StepEvent):
     if event.event_type == "stream_delta":
@@ -217,6 +272,12 @@ def main():
             agent = RexAgent(current_session_id)
             console.print(f"[green]Sesi baru: {current_session_id}[/green]")
             continue
+        elif user_input == "/voice":
+            voice_text = handle_voice_input()
+            if voice_text:
+                user_input = voice_text
+            else:
+                continue
         elif user_input.startswith("/use "):
             requested = user_input[5:].strip()
             try:

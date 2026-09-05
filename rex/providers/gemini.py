@@ -4,16 +4,91 @@ Native Google Gemini Provider using the official google-genai SDK.
 Handles thought signatures and automatic tool execution natively.
 """
 
+import inspect
 import os
 from typing import List, Dict, Any, Optional, Callable
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 from rex.config import ENV_FILE, load_config
+from rex.plugins import effective_tool_registry
 from rex.providers.base import BaseLLMProvider, LLMResponse, StreamEvent
-from rex.tools import delete_file, edit_file, list_dir, read_file, run_command, search_content, search_files, write_file
 
 load_dotenv(ENV_FILE)
+
+# Map JSON schema types to Python annotations used to build the tool signature.
+_JSON_TYPE_MAP = {
+    "string": str,
+    "integer": int,
+    "number": float,
+    "boolean": bool,
+    "array": list,
+    "object": dict,
+}
+
+
+def _schema_for_callable(func: Callable) -> dict:
+    """Best-effort JSON schema derived from a callable's annotations."""
+    properties = {}
+    required = []
+    for name, parameter in inspect.signature(func).parameters.items():
+        annotation = parameter.annotation
+        if annotation is inspect.Parameter.empty:
+            json_type = "string"
+        elif annotation is int:
+            json_type = "integer"
+        elif annotation is float:
+            json_type = "number"
+        elif annotation is bool:
+            json_type = "boolean"
+        elif annotation in (list, List):
+            json_type = "array"
+        else:
+            json_type = "string"
+        properties[name] = {"type": json_type, "description": name}
+        if parameter.default is inspect.Parameter.empty:
+            required.append(name)
+    return {"type": "object", "properties": properties, "required": required}
+
+
+def _build_wrapped_tool(name: str, func: Callable, on_tool_callback, max_chars: int) -> Callable:
+    """
+    Wrap a tool handler so the Gemini SDK sees a proper typed signature,
+    the callback is notified, and results stay within the output budget.
+    """
+    schema = _schema_for_callable(func)
+    required = set(schema.get("required") or [])
+    parameters = [
+        inspect.Parameter(
+            pname,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            annotation=_JSON_TYPE_MAP.get((pdef or {}).get("type"), str),
+            default=inspect.Parameter.empty if pname in required else None,
+        )
+        for pname, pdef in schema.get("properties", {}).items()
+    ]
+    signature = inspect.Signature(parameters)
+
+    def wrapped(*args, **kwargs):
+        if on_tool_callback:
+            callback_args = dict(zip(signature.parameters, args)) | dict(kwargs)
+            on_tool_callback(name, {
+                key: (value[:500] + f"... ({len(value)} chars)") if isinstance(value, str) and len(value) > 500 else value
+                for key, value in callback_args.items()
+            })
+        result = str(func(*args, **kwargs))
+        if len(result) > max_chars:
+            result = result[: max(0, max_chars - 14)] + "\n...[dipotong]"
+        return result
+
+    wrapped.__signature__ = signature
+    wrapped.__name__ = name
+    wrapped.__annotations__ = {
+        pname: parameter.annotation
+        for pname, parameter in signature.parameters.items()
+        if parameter.annotation is not inspect.Parameter.empty
+    }
+    return wrapped
 
 class GeminiProvider(BaseLLMProvider):
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-flash-latest"):
@@ -30,60 +105,11 @@ class GeminiProvider(BaseLLMProvider):
             return
         max_chars = max(100, int(load_config().get("terminal_output_max_chars", 8000)))
 
-        def limited(result: str) -> str:
-            result = str(result)
-            return result if len(result) <= max_chars else result[:max_chars - 14] + "\n...[dipotong]"
-
-        # Wrap tools to notify callback if provided
-        def wrapped_write_file(path: str, content: str) -> str:
-            if on_tool_callback:
-                on_tool_callback("write_file", {"path": path, "content_len": len(content)})
-            return limited(write_file(path, content))
-
-        def wrapped_read_file(path: str) -> str:
-            if on_tool_callback:
-                on_tool_callback("read_file", {"path": path})
-            return limited(read_file(path))
-
-        def wrapped_edit_file(path: str, target_content: str, replacement_content: str) -> str:
-            if on_tool_callback:
-                on_tool_callback("edit_file", {"path": path})
-            return limited(edit_file(path, target_content, replacement_content))
-
-        def wrapped_list_dir(path: str = ".") -> str:
-            if on_tool_callback:
-                on_tool_callback("list_dir", {"path": path})
-            return limited(list_dir(path))
-
-        def wrapped_search_files(query: str, path: str = ".") -> str:
-            if on_tool_callback:
-                on_tool_callback("search_files", {"query": query, "path": path})
-            return limited(search_files(query, path))
-
-        def wrapped_run_command(command: str) -> str:
-            if on_tool_callback:
-                on_tool_callback("run_command", {"command": command})
-            return limited(run_command(command))
-
-        def wrapped_search_content(query: str, path: str = ".") -> str:
-            if on_tool_callback:
-                on_tool_callback("search_content", {"query": query, "path": path})
-            return limited(search_content(query, path))
-
-        def wrapped_delete_file(path: str) -> str:
-            if on_tool_callback:
-                on_tool_callback("delete_file", {"path": path})
-            return limited(delete_file(path))
-
+        # Wrap every registered tool (built-ins + plugins) generically so
+        # plugin tools are exposed to Gemini without code changes.
         tools = [
-            wrapped_read_file,
-            wrapped_write_file,
-            wrapped_edit_file,
-            wrapped_list_dir,
-            wrapped_search_files,
-            wrapped_search_content,
-            wrapped_delete_file,
-            wrapped_run_command
+            _build_wrapped_tool(name, func, on_tool_callback, max_chars)
+            for name, func in effective_tool_registry().items()
         ]
 
         self.chat_session = self.client.chats.create(

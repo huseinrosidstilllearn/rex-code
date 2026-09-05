@@ -14,6 +14,9 @@ CHECKS = [
     "test_config.py",
     "test_sandbox.py",
     "test_git_publish.py",
+    "test_voice.py",
+    "test_plugins.py",
+    "test_webhooks.py",
 ]
 
 

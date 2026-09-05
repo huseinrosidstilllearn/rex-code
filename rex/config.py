@@ -37,6 +37,27 @@ DEFAULT_CONFIG = {
     "router_retry_backoff_sec": 1,
     "max_history_messages": 40,
     "stream_enabled": True,
+    "voice": {
+        "engine": "auto",
+        "model": "gemini-2.5-flash",
+        "api_key_env": "OPENAI_API_KEY",
+        "api_model": "whisper-1",
+        "base_url": None,
+        "local_model": "base"
+    },
+    "plugins": {
+        "enabled": True,
+        "list": []
+    },
+    "webhook": {
+        "enabled": True,
+        "secret_env": "GITHUB_WEBHOOK_SECRET",
+        "token_env": "GITHUB_TOKEN",
+        "events": ["pull_request", "issue_comment"],
+        "trigger_word": "/rex",
+        "auto_review": True,
+        "max_diff_chars": 30000
+    },
     "providers": {
         "gemini": {
             "name": "Google Gemini",
@@ -142,6 +163,53 @@ def normalize_config(cfg: dict) -> dict:
 
     mode = str(cfg.get("active_mode", DEFAULT_CONFIG["active_mode"])).lower()
     cfg["active_mode"] = mode if mode in VALID_MODES else DEFAULT_CONFIG["active_mode"]
+
+    voice_defaults = DEFAULT_CONFIG["voice"]
+    voice = cfg.get("voice")
+    if not isinstance(voice, dict):
+        voice = {}
+    voice = {**voice_defaults, **voice}
+    engine = str(voice.get("engine", "auto")).lower()
+    if engine not in ("auto", "gemini", "openai", "local"):
+        engine = "auto"
+    voice["engine"] = engine
+    if not isinstance(voice.get("model"), str) or not voice["model"].strip():
+        voice["model"] = voice_defaults["model"]
+    if not isinstance(voice.get("api_model"), str) or not voice["api_model"].strip():
+        voice["api_model"] = voice_defaults["api_model"]
+    if not isinstance(voice.get("api_key_env"), str) or not voice["api_key_env"].strip():
+        voice["api_key_env"] = voice_defaults["api_key_env"]
+    if not isinstance(voice.get("local_model"), str) or not voice["local_model"].strip():
+        voice["local_model"] = voice_defaults["local_model"]
+    cfg["voice"] = voice
+
+    plugins_defaults = DEFAULT_CONFIG["plugins"]
+    plugins = cfg.get("plugins")
+    if not isinstance(plugins, dict):
+        plugins = {}
+    plugins = {**plugins_defaults, **plugins}
+    plugins["enabled"] = bool(plugins.get("enabled", True))
+    plugins["list"] = [str(item) for item in plugins.get("list") or [] if isinstance(item, str)]
+    cfg["plugins"] = plugins
+
+    webhook_defaults = DEFAULT_CONFIG["webhook"]
+    webhook = cfg.get("webhook")
+    if not isinstance(webhook, dict):
+        webhook = {}
+    webhook = {**webhook_defaults, **webhook}
+    webhook["enabled"] = bool(webhook.get("enabled", True))
+    webhook["events"] = [str(item) for item in webhook.get("events") or [] if isinstance(item, str)] or webhook_defaults["events"]
+    webhook["trigger_word"] = str(webhook.get("trigger_word") or "/rex")
+    if not isinstance(webhook.get("secret_env"), str) or not webhook["secret_env"].strip():
+        webhook["secret_env"] = webhook_defaults["secret_env"]
+    if not isinstance(webhook.get("token_env"), str) or not webhook["token_env"].strip():
+        webhook["token_env"] = webhook_defaults["token_env"]
+    webhook["auto_review"] = bool(webhook.get("auto_review", True))
+    try:
+        webhook["max_diff_chars"] = max(1000, int(webhook.get("max_diff_chars", 30000)))
+    except (TypeError, ValueError):
+        webhook["max_diff_chars"] = webhook_defaults["max_diff_chars"]
+    cfg["webhook"] = webhook
     return cfg
 
 def get_active_mode() -> str:

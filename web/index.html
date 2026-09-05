@@ -131,6 +131,16 @@
           />
           <button type="button" id="stop-btn" onclick="stopAgent()" class="hidden bg-red-700 hover:bg-red-600 text-white px-4 py-3 rounded-xl text-sm font-semibold">Stop</button>
           <button
+            type="button"
+            id="mic-btn"
+            onclick="toggleRecording()"
+            title="Voice input (Whisper)"
+            class="bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-4 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 transition"
+          >
+            <i data-lucide="mic" class="w-4 h-4"></i>
+            <span id="mic-label">Suara</span>
+          </button>
+          <button
             type="submit"
             id="send-btn"
             class="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-cyan-600/20"

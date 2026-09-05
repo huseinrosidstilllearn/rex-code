@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.DS_Store
+sessions/
+logs/
+workspace/
+workflows/
+docs/screenshots/
+start_web.bat
+start_cli.bat

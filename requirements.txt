@@ -4,6 +4,14 @@ uvicorn[standard]==0.52.4
 websockets==16.1.1
 pydantic==2.13.5
 starlette==1.6.0
+python-multipart==0.0.32
+
+# Optional voice input (CLI mic capture)
+# sounddevice==0.5.1
+# numpy==2.2.3
+
+# Optional local Whisper (offline, heavy)
+# faster-whisper==1.1.1
 
 # LLM Providers
 google-genai==2.22.0
@@ -15,3 +23,6 @@ rich==15.0.0
 
 # Config & Env
 python-dotenv==1.2.3
+
+# IANA timezone database (zoneinfo) — required on Windows, optional elsewhere
+tzdata==2026.3

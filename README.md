@@ -98,11 +98,96 @@ Useful slash commands:
 | `/models` | Pick provider + model without restarting. |
 | `/n8n` | Generate an n8n workflow template. |
 | `/anti-slop` | Audit & clean text from AI clichés. |
+| `/voice` | Record your voice, get Whisper transcription as the next instruction (CLI). |
 | `/files` | List files in the workspace. |
 | `/sessions` `/new` `/use <id>` `/delete <id>` | Session management. |
 | `/help` `/exit` | Self-explanatory. |
 
 While a tool is running you will see a custom **green dinosaur spinner** (`BRAND_GREEN #22C55E`) to confirm the agent is alive.
+
+---
+
+## 🎙️ Voice Input (Whisper)
+
+Dictate instructions instead of typing them. No new dependencies required for the default path.
+
+- **Dashboard** — click the **🎤 Suara** button next to the input bar, speak, click again. The recording is transcribed and dropped into the input for you to review before sending.
+- **CLI** — type `/voice`, speak, press **Enter** to stop. The transcription becomes your next instruction automatically.
+
+Transcription engines are configured under `voice` in `config.json` (`engine`: `auto` by default):
+
+| Engine | Backend | Requirements |
+| --- | --- | --- |
+| `gemini` | Google Gemini (audio-capable model) | `GEMINI_API_KEY` — already used by the default provider |
+| `openai` | OpenAI `/audio/transcriptions` (Whisper) | `OPENAI_API_KEY` (+ optional `base_url` for compatible providers) |
+| `local` | `faster-whisper` (fully offline) | `pip install faster-whisper` |
+
+With `auto`, engines are tried in order (`gemini` → `openai` → `local`) and each is skipped when its key or package is missing. CLI mic capture additionally needs `pip install sounddevice numpy`.
+
+---
+
+## 🧩 Plugin System
+
+Community-contributed tools load from the `plugins/` directory without touching `rex/tools.py`. Each plugin is a single file (`plugins/<name>.py`) or a package (`plugins/<name>/plugin.py`) exposing `PLUGIN_TOOLS`:
+
+```python
+PLUGIN_TOOLS = [{
+    "name": "current_time",
+    "description": "Mengembalikan waktu lokal saat ini.",
+    "parameters": {"type": "object", "properties": {
+        "timezone": {"type": "string", "description": "zona IANA (opsional)"}},
+        "required": []},
+    "handler": my_handler,  # callable; kwargs match parameters
+}]
+```
+
+- Shipped example: `plugins/current_time.py` — try `current_time(timezone="Asia/Jakarta")`.
+- Enable/disable in `config.json`: `"plugins": {"enabled": true, "list": []}` (empty `list` = load all).
+- Plugin tools are merged into the LLM tool schema automatically for **both** the OpenAI-compatible router and the Gemini provider (the Gemini tool list is built dynamically from the merged registry).
+- Broken plugins are isolated: they log a warning and never crash the agent.
+
+---
+
+## 🔔 Webhook Trigger (Run Rex from CI)
+
+Rex Code can review Pull Requests automatically when GitHub sends a webhook — no human in the loop.
+
+1. **Set up secrets** in `.env`:
+   ```
+   GITHUB_WEBHOOK_SECRET=random-secret-anda
+   GITHUB_TOKEN=github_pat_xxx   # token dengan izin read/write issues & PR
+   ```
+2. **Register the webhook** in your repo: *Settings → Webhooks → Add webhook*:
+   - Payload URL: `https://your-host:8000/api/webhook/github`
+   - Content type: `application/json`
+   - Secret: the same `GITHUB_WEBHOOK_SECRET`
+   - Events: **Pull requests** and **Issue comments** (or "Let me select" → both).
+3. **How it behaves**: every PR *opened* / *synchronize* gets an automatic 🦖 Rex Code review comment; typing `/rex ...` in a PR comment triggers a review on demand.
+
+Security rails: every delivery must carry a valid `X-Hub-Signature-256` HMAC (else `403`); the GitHub token is never logged and is stripped from child process environments. Configuration lives under `webhook` in `config.json` (event filters, trigger word, `auto_review`, diff size cap).
+
+Local test without GitHub:
+```bash
+curl -X POST http://localhost:8000/api/webhook/github \
+  -H "X-GitHub-Event: pull_request" \
+  -H "X-Hub-Signature-256: sha256=$(python -c "import hmac,hashlib;print(hmac.new(b'RAHASIA',open('p.json','rb').read(),hashlib.sha256).hexdigest())")" \
+  --data-binary @p.json
+```
+
+---
+
+## 🐳 Docker (Linux / macOS)
+
+The dashboard, webhook receiver, and plugin system run in a container on any platform:
+
+```bash
+docker compose up --build
+# open http://localhost:8000
+```
+
+- `config.json`, `workspace/`, `workflows/`, `sessions/`, and `logs/` are mounted as volumes; secrets come from `.env` at runtime (never baked into the image).
+- Runs as a non-root user with a healthcheck.
+- `run_command` is platform-aware: **PowerShell on Windows, `bash` on Linux/macOS** (`rex/shell.py`), and the sandbox blocks POSIX danger families too — `rm -rf /`, `sudo`, `curl|sh`, `dd if=/dev/zero`, fork bombs, and more (see `test_sandbox.py`).
 
 ---
 
@@ -118,11 +203,12 @@ Rex Code is structured as a thin orchestration layer over a ReAct loop, with str
 │        ↓                        ↓                            │
 │  RexAgent.run() — ReAct loop with StepEvent callbacks       │
 │        ↓                                                    │
-│  Tool layer (rex/tools.py)                                  │
+│  Tool layer (rex/tools.py + rex/plugins.py)                 │
 │  ├── read_file / write_file / edit_file / delete_file       │
 │  ├── list_dir / search_files / search_content               │
 │  ├── run_command (sandboxed via ALWAYS_BLOCKED_COMMANDS)    │
 │  ├── git_status / git_publish (secret-scan guarded)         │
+│  ├── plugin tools (plugins/ dir, community-contributed)     │
 │  └── session_store (rex/sessions.py)                        │
 │        ↓                                                    │
 │  Provider router (rex/providers/) — Gemini, 9router,        │
@@ -176,7 +262,7 @@ Run the full pre-push audit:
 python run_all_checks.py
 ```
 
-It chains 7 mock-driven test suites:
+It chains 10 mock-driven test suites:
 
 | Suite | What it verifies |
 | --- | --- |
@@ -187,6 +273,9 @@ It chains 7 mock-driven test suites:
 | `test_config.py` | `config.json` schema validation. |
 | `test_sandbox.py` | Path traversal, command blocking, sensitive files. |
 | `test_git_publish.py` | 10 scenarios: plan/empty/no-origin/no-changes/secret/too-many/success. |
+| `test_voice.py` | Engine fallback, config repair, missing keys/packages, mime mapping. |
+| `test_plugins.py` | Discovery, config gating, broken-plugin isolation, Gemini wrapping. |
+| `test_webhooks.py` | Signatures, event filtering, PR context, mocked end-to-end review. |
 
 A green run means the foundation is safe to push.
 
@@ -222,10 +311,10 @@ The full schema is exported via `TOOL_DEFINITIONS` in `rex/tools.py` for any Ope
 - [x] n8n & Activepieces workflow export.
 - [x] `git_publish` tool with secret pre-scan.
 - [x] Brand assets + dinosaur spinner.
-- [ ] Voice input (Whisper) for CLI & dashboard.
-- [ ] Plugin system for community-contributed tools.
-- [ ] Docker image for Linux / macOS.
-- [ ] Webhook trigger: run Rex from CI on PR events.
+- [x] Voice input (Whisper) for CLI & dashboard.
+- [x] Plugin system for community-contributed tools.
+- [x] Webhook trigger: run Rex from CI on PR events.
+- [x] Docker image for Linux / macOS.
 
 ---
 
