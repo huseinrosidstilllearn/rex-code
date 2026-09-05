@@ -5,6 +5,7 @@ Native TUI application - Claude-Code-style terminal interface.
 """
 
 from __future__ import annotations
+import sys
 import threading
 from typing import Optional
 from textual import on
@@ -317,19 +318,59 @@ class RexTUIApp(App):
     def on_mount(self):
         pid, _, model = get_active_provider_info()
         self.session_id = session_store.create(pid, model)["id"]
-        self.agent = RexAgent(self.session_id)
         status = self.query_one("#status", StatusBar)
-        status.mode = get_active_mode().upper()
-        status.provider = pid
-        status.model = model
         chat = self.query_one("#chat", ChatArea)
         theme = get_active_theme()
-        chat.write(f"[b {theme.primary}]Rex Code v1.0.0[/b {theme.primary}]")
+        chat.write(f"[b {theme.primary}]Rex Code v{rex.__version__}[/b {theme.primary}]")
         chat.write("[dim]Native TUI -- Autonomous AI Coding & Workflow Agent[/dim]")
         chat.write(f"[dim]Mode: {status.mode} | {pid} | {model}[/dim]")
         chat.write("")
+        try:
+            self.agent = RexAgent(self.session_id)
+        except Exception as exc:
+            self.agent = None
+            chat.write("[bold red]Provider gagal diinisialisasi.[/bold red]")
+            chat.write(f"[dim]{exc}[/dim]")
+            env_path = "[dim]%LOCALAPPDATA%\\RexCode\\.env[/dim]" if getattr(sys, "frozen", False) else "[dim].env[/dim]"
+            chat.write(f"[dim]Isi API key di {env_path} (lihat .env.example), lalu jalankan ulang.[/dim]")
+            chat.write("")
+            chat.write("[dim]Press Ctrl+P for commands. Type /help for reference.[/dim]")
+            chat.write("")
+            return
+        status.mode = get_active_mode().upper()
+        status.provider = pid
+        status.model = model
         chat.write("[dim]Press Ctrl+P for commands. Type /help for reference.[/dim]")
         chat.write("")
+        self._start_update_check()
+
+    def _start_update_check(self):
+        """Background update check - never blocks or crashes startup."""
+        from rex.config import normalize_config
+        from rex.updates import maybe_update
+
+        settings = normalize_config(load_config()).get("updates", {})
+        if not settings.get("enabled", True):
+            return
+
+        def notice(text: str) -> None:
+            def writer():
+                try:
+                    self.query_one("#chat", ChatArea).write(f"[dim]{text}[/dim]")
+                except Exception:
+                    pass
+            self.call_from_thread(writer)
+
+        def ready_to_install(installer_path) -> None:
+            import time
+            notice(f"Menjalankan installer v{installer_path.name}... aplikasi akan ditutup.")
+            from rex.updates import install_update
+            time.sleep(1.0)  # let the notice render
+            install_update(installer_path)
+            time.sleep(0.5)
+            self.call_from_thread(self.exit)
+
+        threading.Thread(target=lambda: maybe_update(settings, notice, ready_to_install), daemon=True).start()
 
     def refresh_theme(self):
         self.query_one("#status", StatusBar).refresh_accent()
@@ -419,6 +460,10 @@ class RexTUIApp(App):
 
     def run_agent(self, user_input):
         if self._running:
+            return
+        if self.agent is None:
+            chat = self.query_one("#chat", ChatArea)
+            chat.add_error("Provider belum siap. Isi API key di .env lalu jalankan ulang.")
             return
         self._running = True
         chat = self.query_one("#chat", ChatArea)

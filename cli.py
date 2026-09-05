@@ -11,6 +11,9 @@ from pathlib import Path
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import rex
+from rex import __version__
+
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
@@ -47,7 +50,7 @@ _BANNER_LINES = (
 def print_banner():
     with tool_spinner("Loading..."):
         banner = "\n".join(f"[bold #22C55E]{line}[/bold #22C55E]" for line in _BANNER_LINES)
-        banner += "\n[dim]                 Autonomous AI Coding & Workflow Agent  v1.0.0[/dim]"
+        banner += f"\n[dim]                 Autonomous AI Coding & Workflow Agent  v{__version__}[/dim]"
         banner += "\n[dim]                      \"You think it, Rex builds it.\"[/dim]"
         console.print(banner)
 
@@ -67,7 +70,7 @@ def print_welcome_panel():
     info_table.add_row("Workspace:", f"[dim]{WORKSPACE_DIR}[/dim]")
 
     whats_new = (
-        "[bold green]What's New in v1.0.0:[/bold green]\n"
+        "[bold green]What's New:[/bold green]\n"
         "• [bold]Dinosaur Sub-agents[/bold]: Specialized read-only advisors\n"
         "  - [green]Brachio[/green] (Reviewer), [yellow]Raptor[/yellow] (Bug Hunter), [red]Trike[/red] (Security)\n"
         "  - [cyan]Ptero[/cyan] (Arch & Docs), [magenta]Dilo[/magenta] (Quality & Anti-Slop)\n"
@@ -155,8 +158,12 @@ def handle_settings():
         table.add_row("stream_enabled", str(cfg.get("stream_enabled", True)))
         table.add_row("voice.engine", cfg.get("voice", {}).get("engine", "auto"))
         table.add_row("max_steps", str(cfg.get("max_steps", 25)))
+        upd = cfg.get("updates", {})
+        table.add_row("updates.enabled", str(upd.get("enabled", True)))
+        table.add_row("updates.auto_download", str(upd.get("auto_download", True)))
+        table.add_row("updates.auto_install", str(upd.get("auto_install", True)))
         console.print(table)
-        choice = Prompt.ask("Ubah setting (mode / anti-slop / stream / voice / max-steps / done)", choices=["mode", "anti-slop", "stream", "voice", "max-steps", "done"], default="done")
+        choice = Prompt.ask("Ubah setting (mode / anti-slop / stream / voice / max-steps / updates / done)", choices=["mode", "anti-slop", "stream", "voice", "max-steps", "updates", "done"], default="done")
         if choice == "done":
             break
         elif choice == "mode":
@@ -178,6 +185,12 @@ def handle_settings():
             except ValueError:
                 console.print("[red]Angka tidak valid.[/red]")
                 continue
+        elif choice == "updates":
+            upd = cfg.setdefault("updates", {})
+            which = Prompt.ask("Flag update mana", choices=["enabled", "auto-download", "auto-install"], default="enabled")
+            key = {"enabled": "enabled", "auto-download": "auto_download", "auto-install": "auto_install"}[which]
+            v = Prompt.ask(f"{which}", choices=["true", "false"], default=str(upd.get(key, True)).lower())
+            upd[key] = v == "true"
     save_config(cfg)
     console.print(f"[bold green]âœ“ Settings disimpan.[/bold green]")
 
@@ -347,12 +360,45 @@ def handle_scheduler():
         console.print("Selesai.", style=f"bold {BRAND_GREEN}")
 
 
+def check_updates_background():
+    """Run the update check on a thread; returns (thread, notice_list)."""
+    import threading
+    from rex.config import normalize_config
+    from rex.updates import maybe_update
+
+    notices = []
+    settings = normalize_config(load_config()).get("updates", {})
+    if not settings.get("enabled", True):
+        return None, notices
+
+    def notice(text):
+        notices.append(text)
+
+    def ready_to_install(installer_path):
+        from rex.updates import install_update
+        if install_update(installer_path):
+            notices.append("__EXIT_FOR_INSTALL__")
+
+    thread = threading.Thread(target=lambda: maybe_update(settings, notice, ready_to_install), daemon=True)
+    thread.start()
+    return thread, notices
+
+
 def main():
     print_banner()
     print_welcome_panel()
     pid, _, model = get_active_provider_info()
     current_session_id = session_store.create(pid, model)["id"]
     agent = RexAgent(current_session_id)
+
+    update_thread, update_notices = check_updates_background()
+    if update_thread is not None:
+        update_thread.join(timeout=3)
+        for text in update_notices:
+            if text == "__EXIT_FOR_INSTALL__":
+                console.print("[bold green]Menjalankan installer pembaruan... Rex Code akan ditutup.[/bold green]")
+                sys.exit(0)
+            console.print(f"[dim]{text}[/dim]")
 
     while True:
         mode = get_active_mode().upper()

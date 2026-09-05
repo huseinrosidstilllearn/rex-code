@@ -43,6 +43,55 @@ Both scripts use the local `.venv` Python, so no global installation is required
 
 ---
 
+## 📦 Windows Installer (EXE)
+
+Rex Code ships as a real Windows installer: `RexCode-Setup-vX.Y.Z-x64.exe`.
+
+**Install** — run the setup exe and choose your options:
+
+- Install dir: `C:\Program Files\RexCode` (default)
+- Desktop / Start Menu shortcuts
+- *Add to PATH* → call `rex` from any terminal
+- *Keep user data* → config, sessions, and logs survive uninstall
+
+**First run** — all user data lives in `%LOCALAPPDATA%\RexCode` (never inside the install folder):
+
+```
+%LOCALAPPDATA%\RexCode\
+├── config.json   ← auto-copied from the bundled default on first run
+├── .env          ← put your GEMINI_API_KEY here (see .env.example)
+├── workspace/  sessions/  logs/  plugins/
+```
+
+**Rebuild the installer yourself** (one command):
+
+```bat
+installer\windows\build_installer.bat
+```
+
+The script chains PyInstaller (bundle build) → frozen-exe smoke test → Inno Setup compile, and reads the version from `rex/__init__.py`. You need the repo `.venv` (with `pyinstaller`) and [Inno Setup 6](https://jrsoftware.org/isinfo.php) — `winget install -e --id JRSoftware.InnoSetup`.
+
+**Other OSes** — push a tag (`git tag v1.0.1 && git push origin v1.0.1`) and `.github/workflows/release.yml` builds the Windows installer plus zipped Linux/macOS binaries, attaching everything to the GitHub Release automatically.
+
+**Uninstall** — Windows Settings → Apps → Rex Code. Untick *Keep user data* during uninstall to also remove `%LOCALAPPDATA%\RexCode`.
+
+### 🔄 Auto-update
+
+Rex checks the GitHub Releases API **at most once per day** (cached in `%LOCALAPPDATA%\RexCode\logs\last_update_check.json`) and never blocks startup — offline, rate-limited, or release-less states are silent skips.
+
+When a newer version exists, Rex shows a one-line notice and (by default) downloads the installer to `%LOCALAPPDATA%\RexCode\downloads\` and launches it — Windows shows its own UAC prompt and the Inno wizard takes over. An anti-loop guard makes auto-install run at most **once per version number**, so cancelling the wizard never triggers endless re-launches.
+
+All three steps are switchable in `config.json` → `updates`:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `true` | Check for updates at startup |
+| `auto_download` | `true` | Download the installer automatically |
+| `auto_install` | `true` | Launch the installer after download |
+| `check_interval_hours` | `24` | Minimum interval between checks |
+
+---
+
 ## 🛠️ Requirements & Installation
 
 Rex Code runs entirely on your machine. It targets **Windows** (PowerShell) with **Python 3.10+**.
@@ -352,6 +401,8 @@ The full schema is exported via `TOOL_DEFINITIONS` in `rex/tools.py` for any Ope
 - [x] Plugin system for community-contributed tools.
 - [x] Webhook trigger: run Rex from CI on PR events.
 - [x] Docker image for Linux / macOS.
+- [x] Windows installer (EXE) + cross-platform release workflow.
+- [x] Auto-update checker (daily check → download → install, opt-out per step).
 
 ---
 

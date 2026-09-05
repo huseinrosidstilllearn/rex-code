@@ -17,6 +17,7 @@ CHECKS = [
     "test_voice.py",
     "test_plugins.py",
     "test_webhooks.py",
+    "test_updates.py",
 ]
 
 

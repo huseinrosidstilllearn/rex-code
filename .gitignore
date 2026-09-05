@@ -10,4 +10,9 @@ sessions/
 logs/
 workspace/
 # docs/brand/*.png IS tracked intentionally (brand assets)
-workflows/
+# anchored to root so .github/workflows/ stays tracked
+/workflows/
+
+# Packaging outputs (spec/iss/scripts stay tracked under installer/)
+build/
+dist/

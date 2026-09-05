@@ -19,3 +19,6 @@ textual==0.86.3
 
 # IANA timezone database (zoneinfo) — required on Windows, optional elsewhere
 tzdata==2026.3
+
+# Build tools (Windows installer packaging)
+pyinstaller==6.22.2

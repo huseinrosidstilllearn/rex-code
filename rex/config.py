@@ -103,6 +103,15 @@ DEFAULT_CONFIG = {
         "auto_review": True,
         "max_diff_chars": 30000
     },
+    "updates": {
+        "enabled": True,
+        "repo": "huseinrosidstilllearn/rex-code",
+        "timeout_sec": 5,
+        "check_interval_hours": 24,
+        "auto_download": True,
+        "auto_install": True,
+        "download_dir": None
+    },
     "scheduler": {
         "enabled": True,
         "jobs": [
@@ -296,6 +305,32 @@ def normalize_config(cfg: dict) -> dict:
             })
     scheduler["jobs"] = normalized_jobs
     cfg["scheduler"] = scheduler
+
+    updates_defaults = DEFAULT_CONFIG["updates"]
+    updates = cfg.get("updates")
+    if not isinstance(updates, dict):
+        updates = {}
+    updates = {**updates_defaults, **updates}
+    updates["enabled"] = bool(updates.get("enabled", True))
+    updates["auto_download"] = bool(updates.get("auto_download", True))
+    updates["auto_install"] = bool(updates.get("auto_install", True))
+    repo = str(updates.get("repo") or "").strip()
+    if not repo or repo.count("/") != 1:
+        repo = updates_defaults["repo"]
+    updates["repo"] = repo
+    try:
+        updates["timeout_sec"] = max(1, min(30, float(updates.get("timeout_sec", 5))))
+    except (TypeError, ValueError):
+        updates["timeout_sec"] = updates_defaults["timeout_sec"]
+    try:
+        updates["check_interval_hours"] = max(0.25, float(updates.get("check_interval_hours", 24)))
+    except (TypeError, ValueError):
+        updates["check_interval_hours"] = updates_defaults["check_interval_hours"]
+    download_dir = updates.get("download_dir")
+    if download_dir is not None and (not isinstance(download_dir, str) or not download_dir.strip()):
+        download_dir = None
+    updates["download_dir"] = download_dir
+    cfg["updates"] = updates
     return cfg
 
 def get_active_mode() -> str:
