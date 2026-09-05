@@ -58,6 +58,18 @@ DEFAULT_CONFIG = {
         "auto_review": True,
         "max_diff_chars": 30000
     },
+    "scheduler": {
+        "enabled": True,
+        "jobs": [
+            {
+                "id": "nightly-commit",
+                "cron": "0 22 * * *",
+                "prompt": "Review workspace, run tests, then git_publish with message 'chore: nightly commit'",
+                "mode": "build",
+                "enabled": True
+            }
+        ]
+    },
     "providers": {
         "gemini": {
             "name": "Google Gemini",
@@ -210,6 +222,35 @@ def normalize_config(cfg: dict) -> dict:
     except (TypeError, ValueError):
         webhook["max_diff_chars"] = webhook_defaults["max_diff_chars"]
     cfg["webhook"] = webhook
+
+    scheduler_defaults = DEFAULT_CONFIG["scheduler"]
+    scheduler = cfg.get("scheduler")
+    if not isinstance(scheduler, dict):
+        scheduler = {}
+    scheduler = {**scheduler_defaults, **scheduler}
+    scheduler["enabled"] = bool(scheduler.get("enabled", True))
+    jobs = scheduler.get("jobs")
+    if not isinstance(jobs, list):
+        jobs = []
+    normalized_jobs = []
+    for job in jobs:
+        if not isinstance(job, dict):
+            continue
+        job_id = str(job.get("id", "")).strip()
+        cron = str(job.get("cron", "")).strip()
+        prompt = str(job.get("prompt", "")).strip()
+        mode = str(job.get("mode", "build")).lower()
+        enabled = bool(job.get("enabled", True))
+        if job_id and cron and prompt and mode in VALID_MODES:
+            normalized_jobs.append({
+                "id": job_id,
+                "cron": cron,
+                "prompt": prompt,
+                "mode": mode,
+                "enabled": enabled
+            })
+    scheduler["jobs"] = normalized_jobs
+    cfg["scheduler"] = scheduler
     return cfg
 
 def get_active_mode() -> str:

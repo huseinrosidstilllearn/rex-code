@@ -32,6 +32,7 @@ from rex.core import RexAgent, StepEvent
 from rex.anti_slop import detect_slop, clean_slop
 from rex.automation.n8n_builder import create_webhook_ai_workflow
 from rex.sessions import session_store
+from rex.scheduler import get_scheduler
 
 app = FastAPI(title="Rex Code Web Dashboard")
 
@@ -53,9 +54,36 @@ class SessionCreate(BaseModel):
     provider: str = None
     model: str = None
 
+class JobTriggerRequest(BaseModel):
+    job_id: str
+
 @app.get("/")
 async def root():
     return FileResponse(web_dir / "index.html")
+
+
+@app.on_event("startup")
+async def startup_scheduler():
+    get_scheduler().start()
+
+
+@app.on_event("shutdown")
+async def shutdown_scheduler():
+    get_scheduler().stop()
+
+
+@app.get("/api/scheduler/jobs")
+async def list_scheduler_jobs():
+    return get_scheduler().get_job_status()
+
+
+@app.post("/api/scheduler/trigger")
+async def trigger_scheduler_job(request: JobTriggerRequest):
+    result = get_scheduler().trigger_job(request.job_id)
+    if not result.get("ok"):
+        raise HTTPException(status_code=404, detail=result.get("error"))
+    return result
+
 
 @app.get("/api/config")
 async def get_config():
