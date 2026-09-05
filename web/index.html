@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rex Code â€” Autonomous AI Coding & Workflow Agent</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    pre, code { font-family: 'JetBrains Mono', monospace; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen overflow-hidden">
+
+  <!-- Header -->
+  <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 px-6 py-3 flex items-center justify-between z-10">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-2xl shadow-lg shadow-cyan-500/10">
+        ðŸ¦–
+      </div>
+      <div>
+        <h1 class="font-bold text-lg text-white flex items-center gap-2">
+          Rex Code
+          <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 font-medium">v1.0.0</span>
+        </h1>
+        <p class="text-xs text-slate-400">Autonomous AI Coding & Workflow Agent</p>
+      </div>
+    </div>
+
+    <!-- Center: Plan & Build Mode Switcher -->
+    <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800">
+      <button id="btn-mode-plan" onclick="switchMode('plan')" class="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold transition-all bg-blue-600 text-white shadow-md">
+        <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+        <span>Mode Plan</span>
+      </button>
+      <button id="btn-mode-build" onclick="switchMode('build')" class="flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+        <i data-lucide="hammer" class="w-4 h-4"></i>
+        <span>Mode Build</span>
+      </button>
+    </div>
+
+    <!-- Right: Provider & Model Selector -->
+    <div class="flex items-center space-x-3">
+      <div class="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
+        <i data-lucide="cpu" class="w-3.5 h-3.5 text-cyan-400"></i>
+        <select id="model-select" onchange="changeModel(this)" class="bg-transparent text-white outline-none cursor-pointer">
+          <option class="bg-slate-900">Memuat model...</option>
+        </select>
+      </div>
+
+      <!-- Anti-Slop Indicator -->
+      <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs" title="Anti-Slop Guardrail Aktif">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+        <span class="font-medium">No-AI-Slop</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace Layout -->
+  <main class="flex-1 flex overflow-hidden">
+
+    <!-- Conversations -->
+    <aside class="w-64 flex flex-col border-r border-slate-800 bg-slate-900/70">
+      <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+        <span class="text-xs font-semibold text-slate-300">Percakapan</span>
+        <button onclick="createSession()" title="Percakapan baru" class="p-1.5 rounded hover:bg-slate-800 text-cyan-400">
+          <i data-lucide="square-pen" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <div id="session-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+    </aside>
+
+    <!-- Left: Interactive Chat & Steps -->
+    <section class="flex-1 flex flex-col border-r border-slate-800 bg-slate-950/50">
+
+      <!-- Mode Status Banner -->
+      <div id="mode-banner" class="bg-blue-950/40 border-b border-blue-900/40 px-6 py-2.5 flex items-center justify-between text-xs">
+        <div class="flex items-center gap-2 text-blue-300">
+          <i data-lucide="info" class="w-4 h-4 text-blue-400"></i>
+          <span id="mode-desc">Mode Plan Aktif: Rex Code hanya meneliti dan merancang tanpa mengubah file.</span>
+        </div>
+        <button id="btn-quick-build" onclick="switchMode('build')" class="hidden px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-semibold transition">
+          Setujui & Jalankan Build â†’
+        </button>
+      </div>
+
+      <!-- Messages Area -->
+      <div id="messages-container" class="flex-1 overflow-y-auto p-6 space-y-4">
+        <!-- Welcome Message -->
+        <div class="flex gap-3 max-w-3xl">
+          <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-base shrink-0">
+            ðŸ¦–
+          </div>
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-sm leading-relaxed text-slate-200">
+            <p class="font-semibold text-cyan-400 mb-1">Halo! Saya Rex Code, asisten coding dan otomatisasi Anda.</p>
+            <p class="text-slate-300 mb-3">
+              Anda tidak perlu bisa coding. Cukup ceritakan apa yang ingin dibuat, saya yang akan menuliskan kodenya, menguji di komputer, atau merancang alur kerja n8n/Activepieces.
+            </p>
+            <div class="flex flex-wrap gap-2 text-xs">
+              <button onclick="sendQuickPrompt('Tolong buatkan website landing page kafe kopi modern')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
+                â˜• Bikin Landing Page Kafe
+              </button>
+              <button onclick="sendQuickPrompt('Buatkan workflow n8n untuk otomatisasi WhatsApp ke Gemini AI')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
+                âš¡ Buat Workflow n8n AI
+              </button>
+              <button onclick="sendQuickPrompt('Buatkan game mini Tic-Tac-Toe interaktif')" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700">
+                ðŸŽ® Bikin Game Mini
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Input Bar -->
+      <div class="p-4 bg-slate-900 border-t border-slate-800">
+        <form id="chat-form" onsubmit="handleChatSubmit(event)" class="flex gap-2">
+          <input
+            id="chat-input"
+            type="text"
+            placeholder="Ketik instruksi Anda dalam Bahasa Indonesia..."
+            class="flex-1 bg-slate-950 border border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition"
+            autocomplete="off"
+          />
+          <button type="button" id="stop-btn" onclick="stopAgent()" class="hidden bg-red-700 hover:bg-red-600 text-white px-4 py-3 rounded-xl text-sm font-semibold">Stop</button>
+          <button
+            type="submit"
+            id="send-btn"
+            class="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-cyan-600/20"
+          >
+            <span>Kirim</span>
+            <i data-lucide="send" class="w-4 h-4"></i>
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Right: File Explorer & Tools -->
+    <aside class="w-96 flex flex-col bg-slate-900/60">
+      <!-- Tabs -->
+      <div class="flex border-b border-slate-800 px-2 pt-2 bg-slate-900">
+        <button id="tab-files-btn" onclick="switchTab('files')" class="flex-1 py-2 text-xs font-semibold text-cyan-400 border-b-2 border-cyan-400 flex items-center justify-center gap-1.5">
+          <i data-lucide="folder" class="w-3.5 h-3.5"></i>
+          <span>Workspace</span>
+        </button>
+        <button id="tab-n8n-btn" onclick="switchTab('n8n')" class="flex-1 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center justify-center gap-1.5">
+          <i data-lucide="git-merge" class="w-3.5 h-3.5"></i>
+          <span>n8n / Workflows</span>
+        </button>
+        <button id="tab-viewer-btn" onclick="switchTab('viewer')" class="flex-1 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 border-b-2 border-transparent flex items-center justify-center gap-1.5">
+          <i data-lucide="file-code" class="w-3.5 h-3.5"></i>
+          <span>File Viewer</span>
+        </button>
+      </div>
+
+      <!-- Tab Content: Files -->
+      <div id="tab-files" class="flex-1 overflow-y-auto p-4 space-y-2">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">File di ./workspace</span>
+          <button onclick="refreshFiles()" class="text-slate-400 hover:text-white text-xs flex items-center gap-1">
+            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+            Refresh
+          </button>
+        </div>
+        <div id="file-list" class="space-y-1 text-xs text-slate-300">
+          <p class="text-slate-500 italic">Belum ada file yang dibuat.</p>
+        </div>
+      </div>
+
+      <!-- Tab Content: n8n Workflows -->
+      <div id="tab-n8n" class="hidden flex-1 overflow-y-auto p-4 space-y-4">
+        <div>
+          <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Workflow Otomasi</h3>
+          <p class="text-xs text-slate-400 mb-3">File JSON siap import langsung ke dashboard n8n atau Activepieces Anda.</p>
+          <button onclick="createN8nTemplate()" class="w-full py-2 px-3 bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 text-cyan-300 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i>
+            <span>Generate Template Webhook AI</span>
+          </button>
+        </div>
+        <div id="workflow-list" class="space-y-1 text-xs">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Tab Content: Viewer -->
+      <div id="tab-viewer" class="hidden flex-1 flex flex-col p-4">
+        <div class="flex items-center justify-between mb-2">
+          <span id="viewing-filename" class="text-xs font-bold text-cyan-400">Pilih file untuk melihat</span>
+        </div>
+        <pre id="code-preview" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-300 overflow-auto font-mono">Pilih file dari tab Workspace atau Workflows untuk melihat isi kodenya di sini.</pre>
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- External Script -->
+  <script src="/static/app.js"></script>
+</body>
+</html>

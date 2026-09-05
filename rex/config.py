@@ -1,0 +1,163 @@
+"""
+rex.config
+Configuration manager for Rex Code.
+"""
+
+import os
+import json
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Base paths
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+WORKSPACE_DIR = PROJECT_ROOT / "workspace"
+WORKFLOWS_DIR = PROJECT_ROOT / "workflows"
+CONFIG_FILE = PROJECT_ROOT / "config.json"
+ENV_FILE = PROJECT_ROOT / ".env"
+
+# Ensure directories exist
+WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+WORKFLOWS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Load environment variables
+load_dotenv(ENV_FILE)
+
+DEFAULT_CONFIG = {
+    "active_provider": "gemini",
+    "active_model": "gemini-flash-latest",
+    "active_mode": "plan",
+    "anti_slop_enabled": True,
+    "max_steps": 25,
+    "terminal_timeout_sec": 45,
+    "terminal_output_max_chars": 8000,
+    "file_read_max_chars": 20000,
+    "command_allowlist": ["python", "pip", "node", "npm", "npx", "dir", "git"],
+    "router_timeout_sec": 120,
+    "router_retry_attempts": 3,
+    "router_retry_backoff_sec": 1,
+    "max_history_messages": 40,
+    "stream_enabled": True,
+    "providers": {
+        "gemini": {
+            "name": "Google Gemini",
+            "type": "gemini",
+            "api_key_env": "GEMINI_API_KEY",
+            "model": "gemini-flash-latest",
+            "available_models": ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.5-pro"]
+        },
+        "9router": {
+            "name": "9router",
+            "type": "openai_compatible",
+            "base_url": os.getenv("NINE_ROUTER_BASE_URL", "https://api.9router.com/v1"),
+            "api_key_env": "NINE_ROUTER_API_KEY",
+            "model": "gpt-4o-mini",
+            "available_models": ["gpt-4o-mini", "gpt-4o", "claude-3-5-sonnet", "deepseek-v3"]
+        },
+        "omniroute": {
+            "name": "OmniRoute / OpenRouter",
+            "type": "openai_compatible",
+            "base_url": os.getenv("OMNI_ROUTE_BASE_URL", "https://api.openrouter.ai/v1"),
+            "api_key_env": "OMNI_ROUTE_API_KEY",
+            "model": "google/gemini-2.5-flash",
+            "available_models": ["google/gemini-2.5-flash", "anthropic/claude-3.5-sonnet", "openai/gpt-4o", "deepseek/deepseek-chat"]
+        },
+        "custom": {
+            "name": "Custom OpenAI / Local Ollama",
+            "type": "openai_compatible",
+            "base_url": os.getenv("OPENAI_BASE_URL", "http://localhost:11434/v1"),
+            "api_key_env": "OPENAI_API_KEY",
+            "model": "deepseek-r1",
+            "available_models": ["deepseek-r1", "llama3.2", "qwen2.5-coder"]
+        }
+    }
+}
+
+def load_config() -> dict:
+    if CONFIG_FILE.exists():
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return DEFAULT_CONFIG.copy()
+
+def save_config(cfg: dict) -> None:
+    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2)
+
+VALID_MODES = ("plan", "build")
+
+def normalize_config(cfg: dict) -> dict:
+    """Validate and repair config, including custom OpenAI-compatible providers."""
+    defaults = DEFAULT_CONFIG["providers"]
+    providers = cfg.get("providers")
+    if not isinstance(providers, dict):
+        providers = defaults
+
+    valid_providers = {}
+    for provider_id, raw in providers.items():
+        if not isinstance(provider_id, str) or not isinstance(raw, dict):
+            continue
+        provider = {**defaults.get(provider_id, {}), **raw}
+        provider_type = provider.get("type")
+        models = provider.get("available_models")
+        model = provider.get("model")
+
+        if provider_type == "gemini":
+            if provider_id != "gemini":
+                continue
+        elif provider_type == "openai_compatible":
+            base_url = provider.get("base_url")
+            if not isinstance(base_url, str) or not base_url.startswith(("http://", "https://")):
+                continue
+        else:
+            continue
+
+        if not isinstance(models, list):
+            models = []
+        models = [item for item in models if isinstance(item, str) and item.strip()]
+        if isinstance(model, str) and model.strip() and model not in models:
+            models.insert(0, model)
+        if not models:
+            continue
+
+        provider["available_models"] = models
+        provider["model"] = model if model in models else models[0]
+        provider["name"] = str(provider.get("name") or provider_id)
+        provider["api_key_env"] = str(provider.get("api_key_env") or "OPENAI_API_KEY")
+        valid_providers[provider_id] = provider
+
+    if "gemini" not in valid_providers:
+        valid_providers["gemini"] = defaults["gemini"].copy()
+    cfg["providers"] = valid_providers
+
+    provider_id = cfg.get("active_provider", DEFAULT_CONFIG["active_provider"])
+    if provider_id not in valid_providers:
+        provider_id = DEFAULT_CONFIG["active_provider"]
+        cfg["active_provider"] = provider_id
+
+    available = valid_providers[provider_id]["available_models"]
+    if cfg.get("active_model") not in available:
+        cfg["active_model"] = valid_providers[provider_id]["model"]
+
+    mode = str(cfg.get("active_mode", DEFAULT_CONFIG["active_mode"])).lower()
+    cfg["active_mode"] = mode if mode in VALID_MODES else DEFAULT_CONFIG["active_mode"]
+    return cfg
+
+def get_active_mode() -> str:
+    return normalize_config(load_config())["active_mode"]
+
+def set_active_mode(mode: str) -> None:
+    mode = str(mode).lower()
+    if mode not in VALID_MODES:
+        raise ValueError(f"Mode '{mode}' tidak valid. Gunakan 'plan' atau 'build'.")
+    cfg = load_config()
+    cfg["active_mode"] = mode
+    save_config(cfg)
+
+def get_active_provider_info() -> tuple:
+    cfg = normalize_config(load_config())
+    provider_id = cfg.get("active_provider", "gemini")
+    prov = cfg.get("providers", {}).get(provider_id, DEFAULT_CONFIG["providers"]["gemini"])
+    model = cfg.get("active_model", prov.get("model", "gemini-flash-latest"))
+    return provider_id, prov, model

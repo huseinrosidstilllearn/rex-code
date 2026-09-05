@@ -1,0 +1,76 @@
+{
+  "active_provider": "gemini",
+  "active_model": "gemini-flash-latest",
+  "active_mode": "build",
+  "anti_slop_enabled": true,
+  "workspace_dir": "workspace",
+  "workflows_dir": "workflows",
+  "terminal_timeout_sec": 45,
+  "terminal_output_max_chars": 8000,
+  "file_read_max_chars": 20000,
+  "command_allowlist": [
+    "python",
+    "pip",
+    "node",
+    "npm",
+    "npx",
+    "dir",
+    "git"
+  ],
+  "router_timeout_sec": 120,
+  "router_retry_attempts": 3,
+  "router_retry_backoff_sec": 1,
+  "max_history_messages": 40,
+  "stream_enabled": true,
+  "providers": {
+    "gemini": {
+      "name": "Google Gemini",
+      "type": "gemini",
+      "api_key_env": "GEMINI_API_KEY",
+      "model": "gemini-flash-latest",
+      "available_models": [
+        "gemini-flash-latest",
+        "gemini-2.5-flash",
+        "gemini-2.5-pro"
+      ]
+    },
+    "9router": {
+      "name": "9router",
+      "type": "openai_compatible",
+      "base_url": "https://api.9router.com/v1",
+      "api_key_env": "NINE_ROUTER_API_KEY",
+      "model": "gpt-4o-mini",
+      "available_models": [
+        "gpt-4o-mini",
+        "gpt-4o",
+        "claude-3-5-sonnet",
+        "deepseek-v3"
+      ]
+    },
+    "omniroute": {
+      "name": "OmniRoute / OpenRouter",
+      "type": "openai_compatible",
+      "base_url": "https://api.openrouter.ai/v1",
+      "api_key_env": "OMNI_ROUTE_API_KEY",
+      "model": "google/gemini-2.5-flash",
+      "available_models": [
+        "google/gemini-2.5-flash",
+        "anthropic/claude-3.5-sonnet",
+        "openai/gpt-4o",
+        "deepseek/deepseek-chat"
+      ]
+    },
+    "custom": {
+      "name": "Custom OpenAI / Local Ollama",
+      "type": "openai_compatible",
+      "base_url": "http://localhost:11434/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "model": "deepseek-r1",
+      "available_models": [
+        "deepseek-r1",
+        "llama3.2",
+        "qwen2.5-coder"
+      ]
+    }
+  }
+}

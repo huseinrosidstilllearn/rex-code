@@ -1,0 +1,17 @@
+# FastAPI + Web Dashboard
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+websockets==16.1.1
+pydantic==2.13.5
+starlette==1.6.0
+
+# LLM Providers
+google-genai==2.22.0
+openai==3.8.0
+httpx==0.28.1
+
+# CLI
+rich==15.0.0
+
+# Config & Env
+python-dotenv==1.2.3
