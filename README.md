@@ -26,6 +26,8 @@ You think it, Rex builds it. A resilient, secure agent that plans, builds, and d
 - **Anti-slop guardrail.** Strips AI clichés (`leverage`, `tapestry`, `game changer`) and keeps output natural.
 - **Local sessions.** Conversation history survives browser refresh and CLI restarts. Secrets and long outputs are redacted before saving.
 - **Hard security rails.** Path traversal, sensitive files, and dangerous shell commands are blocked. Secrets never enter child processes.
+- **🦕 Sub-Agent Specialists.** Five read-only dinosaur analysts (Brachio, Raptor, Trike, Ptero, Dilo) that you can delegate to for code review, bug hunting, security auditing, architecture analysis, and quality audits — all in Plan mode with anti-recursion protection.
+- **Claude-Code-style CLI.** Rich ANSI Shadow block-letter banner, welcome panel with mode/provider/model/workspace, and beautiful per-agent report panels with ASCII art faces.
 
 ---
 ## 🎬 One-Liner Start
@@ -281,11 +283,46 @@ A green run means the foundation is safe to push.
 
 ---
 
+The agent (and the dashboard's "Tools" tab) can invoke any of these:
+
+| Tool | Mode | Purpose |
+| --- | --- | --- |
+| `read_file` | PLAN & BUILD | Read a workspace file. |
+| `write_file` | BUILD only | Create / overwrite a file. |
+| `edit_file` | BUILD only | Surgical text replacement. |
+| `list_dir` | PLAN & BUILD | Tree of the workspace. |
+| `search_files` | PLAN & BUILD | Find files by name. |
+| `search_content` | PLAN & BUILD | Grep workspace with line numbers. |
+| `delete_file` | BUILD only | Remove a single file. |
+| `run_command` | BUILD only | Run a PowerShell command in a sandbox. |
+| `git_status` | PLAN & BUILD | Short + branch git summary. |
+| `git_publish` | BUILD only | Stage → secret-scan → commit → push. |
+| **`delegate_to_brachio`** | PLAN only | Delegate code review & general analysis (read-only). |
+| **`delegate_to_raptor`** | PLAN only | Delegate bug hunting & traceback analysis (read-only). |
+| **`delegate_to_trike`** | PLAN only | Delegate security auditing & vulnerability scanning (read-only). |
+| **`delegate_to_ptero`** | PLAN only | Delegate architecture & documentation analysis (read-only). |
+| **`delegate_to_dilo`** | PLAN only | Delegate quality auditing & anti-slop detection (read-only). |
+
+The full schema is exported via `TOOL_DEFINITIONS` in `rex/tools.py` for any OpenAI-compatible LLM.
 ## 🧰 Available Tools
 
 The agent (and the dashboard's "Tools" tab) can invoke any of these:
 
 | Tool | Mode | Purpose |
+## 🗺️ Roadmap
+
+- [x] Secure foundation: mode gate, path sandbox, sensitive-file block.
+- [x] Multi-provider router (Gemini + OpenAI-compatible + local).
+- [x] Streaming chat with cooperative abort.
+- [x] Session persistence with secret redaction.
+- [x] n8n & Activepieces workflow export.
+- [x] `git_publish` tool with secret pre-scan.
+- [x] **🦕 Sub-Agent Framework** + 5 specialized dinosaur agents (Brachio, Raptor, Trike, Ptero, Dilo).
+- [x] Brand assets + dinosaur spinner.
+- [x] Voice input (Whisper) for CLI & dashboard.
+- [x] Plugin system for community-contributed tools.
+- [x] Webhook trigger: run Rex from CI on PR events.
+- [x] Docker image for Linux / macOS.
 | --- | --- | --- |
 | `read_file` | PLAN & BUILD | Read a workspace file. |
 | `write_file` | BUILD only | Create / overwrite a file. |
