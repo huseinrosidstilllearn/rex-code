@@ -32,24 +32,6 @@ from rex.voice import transcribe_audio, VoiceTranscriptionError
 console = Console()
 
 
-def step_callback(event: StepEvent) -> None:
-    """Rich callback for the ReAct step loop."""
-    action = event.action
-    thought = event.thought or ""
-    observation = event.observation or ""
-
-    lines = []
-    if action:
-        lines.append(f"[bold yellow]Action:[/bold yellow] {action}")
-    if thought:
-        lines.append(f"[bold blue]Thought:[/bold blue] {thought}")
-    if observation:
-        obs_short = observation[:500] + ("..." if len(observation) > 500 else "")
-        lines.append(f"[bold green]Observation:[/bold green] {obs_short}")
-
-    if lines:
-        console.print("\n".join(lines), style="dim")
-
 
 def tool_spinner(text: str):
     """Context manager: shows a green dino spinner around a tool call."""
@@ -66,6 +48,12 @@ def print_banner():
 [bold cyan] |_| \_\_____/_/\_\  \____\___/|____/|_____|[/bold cyan]
 [dim]     Autonomous AI Coding & Workflow Agent  v1.0.0[/dim]
 [dim]     "You think it, Rex builds it."[/dim]
+[dim]
+      __
+     /      ( o  o)
+    |   __|
+    |  |  |
+    \__/  \__[/dim]
     """
         console.print(banner)
 
@@ -78,6 +66,8 @@ def show_help():
     table.add_row("/models", "Ganti Model atau Provider (Gemini, 9router, OmniRoute, Local)")
     table.add_row("/n8n", "Generate template workflow otomasi n8n (JSON siap import)")
     table.add_row("/anti-slop", "Audit dan bersihkan teks dari buzzword & pola klise AI")
+    table.add_row("/settings", "Ubah konfigurasi interaktif (mode, anti-slop, stream, voice, max-steps)")
+    table.add_row("/scheduler", "Lihat daftar jobs dan trigger manual")
     table.add_row("/voice", "Voice input (Whisper): rekam suara, langsung jadi instruksi")
     table.add_row("/files", "Lihat daftar file di workspace/")
     table.add_row("/reset", "Reset riwayat percakapan")
@@ -117,6 +107,44 @@ def handle_models_switch():
 
     save_config(cfg)
     console.print(f"[bold green]âœ“ Provider aktif diubah ke: {choice} ({cfg['active_model']})[/bold green]")
+
+def handle_settings():
+    cfg = load_config()
+    while True:
+        table = Table(title="Settings", show_header=True, header_style="bold magenta")
+        table.add_column("Kunci", style="bold yellow")
+        table.add_column("Nilai", style="white")
+        table.add_row("mode", cfg.get("active_mode", "plan"))
+        table.add_row("anti_slop_enabled", str(cfg.get("anti_slop_enabled", True)))
+        table.add_row("stream_enabled", str(cfg.get("stream_enabled", True)))
+        table.add_row("voice.engine", cfg.get("voice", {}).get("engine", "auto"))
+        table.add_row("max_steps", str(cfg.get("max_steps", 25)))
+        console.print(table)
+        choice = Prompt.ask("Ubah setting (mode / anti-slop / stream / voice / max-steps / done)", choices=["mode", "anti-slop", "stream", "voice", "max-steps", "done"], default="done")
+        if choice == "done":
+            break
+        elif choice == "mode":
+            m = Prompt.ask("Mode", choices=["plan", "build"], default=cfg.get("active_mode", "plan"))
+            cfg["active_mode"] = m
+        elif choice == "anti-slop":
+            v = Prompt.ask("Anti-slop enabled", choices=["true", "false"], default=str(cfg.get("anti_slop_enabled", True)).lower())
+            cfg["anti_slop_enabled"] = v == "true"
+        elif choice == "stream":
+            v = Prompt.ask("Stream enabled", choices=["true", "false"], default=str(cfg.get("stream_enabled", True)).lower())
+            cfg["stream_enabled"] = v == "true"
+        elif choice == "voice":
+            v = Prompt.ask("Voice engine", choices=["auto", "openai", "local"], default=cfg.get("voice", {}).get("engine", "auto"))
+            cfg.setdefault("voice", {})["engine"] = v
+        elif choice == "max-steps":
+            v = Prompt.ask("Max steps", default=str(cfg.get("max_steps", 25)))
+            try:
+                cfg["max_steps"] = int(v)
+            except ValueError:
+                console.print("[red]Angka tidak valid.[/red]")
+                continue
+    save_config(cfg)
+    console.print(f"[bold green]âœ“ Settings disimpan.[/bold green]")
+
 
 def handle_anti_slop_audit():
     text = Prompt.ask("Masukkan teks atau kalimat yang ingin diaudit dari AI-Slop")
@@ -186,20 +214,88 @@ def handle_voice_input() -> str:
     return text
 
 
+
 def step_callback(event: StepEvent):
     if event.event_type == "stream_delta":
         console.print(str(event.data), end="", markup=False, highlight=False)
     elif event.event_type == "thought":
-        console.print(Panel(Markdown(event.data), title="ðŸ§  Rex Berpikir", border_style="dim blue"))
+        console.print(Panel(Markdown(event.data), title="Rex Berpikir", border_style="dim blue"))
     elif event.event_type == "tool_call":
         name = event.data.get("name")
         args = event.data.get("args")
-        console.print(f"[bold yellow]âš¡ Menjalankan Tool:[/bold yellow] [cyan]{name}[/cyan]({args})")
+        console.print(f"Tool: [cyan]{name}[/cyan]({args})", style=f"bold {BRAND_GREEN}")
     elif event.event_type == "tool_result":
         name = event.data.get("name")
         res = str(event.data.get("result", ""))
         snippet = res if len(res) < 300 else res[:300] + "... (dipotong)"
-        console.print(Panel(snippet, title=f"âœ“ Hasil Tool: {name}", border_style="dim green"))
+        console.print(Panel(snippet, title=f"Hasil Tool: {name}", border_style=BRAND_GREEN))
+    elif event.event_type == "error":
+        err = str(event.data.get("error", ""))
+        console.print(Panel(err, title="Error", border_style="red"))
+    elif event.event_type == "mode_switch":
+        mode = event.data.get("mode", "?")
+        console.print(f"Beralih ke Mode {mode.upper()}", style="bold blue")
+    elif event.event_type == "done":
+        console.print("Selesai.", style=f"bold {BRAND_GREEN}")
+
+def handle_scheduler():
+    from rex.scheduler import get_scheduler
+    scheduler = get_scheduler()
+    jobs = scheduler.get_job_status()
+    if not jobs:
+        console.print("[dim]Tidak ada job yang terdaftar.[/dim]")
+        return
+    table = Table(title="Scheduler Jobs", show_header=True, header_style="bold magenta")
+    table.add_column("ID", style="bold yellow")
+    table.add_column("Cron", style="cyan")
+    table.add_column("Prompt", style="white")
+    table.add_column("Mode", style="green")
+    table.add_column("Enabled", style="green")
+    table.add_column("Last Run", style="dim")
+    table.add_column("Next Run", style="dim")
+    for job in jobs:
+        table.add_row(
+            job.get("id", ""),
+            job.get("cron", ""),
+            job.get("prompt", "")[:60],
+            job.get("mode", ""),
+            "Y" if job.get("enabled") else "N",
+            job.get("last_run") or "-",
+            job.get("next_run") or "-",
+        )
+    console.print(table)
+    choice = Prompt.ask("Masukkan job ID untuk trigger manual (kosongkan untuk batal)", default="")
+    if choice.strip():
+        try:
+            res = scheduler.trigger_job(choice.strip())
+            console.print(f"[bold green]âœ“ Job '{choice.strip()}' di-trigger.[/bold green]")
+            if res.get("output"):
+                console.print(Panel(str(res.get("output")), title="Output", border_style="dim green"))
+        except Exception as exc:
+            console.print(f"[red]Gagal trigger job: {exc}[/red]")
+
+
+        console.print(str(event.data), end="", markup=False, highlight=False)
+    elif event.event_type == "thought":
+        console.print(Panel(Markdown(event.data), title="Rex Berpikir", border_style="dim blue"))
+    elif event.event_type == "tool_call":
+        name = event.data.get("name")
+        args = event.data.get("args")
+        console.print(f"Tool: [cyan]{name}[/cyan]({args})", style=f"bold {BRAND_GREEN}")
+    elif event.event_type == "tool_result":
+        name = event.data.get("name")
+        res = str(event.data.get("result", ""))
+        snippet = res if len(res) < 300 else res[:300] + "... (dipotong)"
+        console.print(Panel(snippet, title=f"Hasil Tool: {name}", border_style=BRAND_GREEN))
+    elif event.event_type == "error":
+        err = str(event.data.get("error", ""))
+        console.print(Panel(err, title="Error", border_style="red"))
+    elif event.event_type == "mode_switch":
+        mode = event.data.get("mode", "?")
+        console.print(f"Beralih ke Mode {mode.upper()}", style="bold blue")
+    elif event.event_type == "done":
+        console.print("Selesai.", style=f"bold {BRAND_GREEN}")
+
 
 def main():
     print_banner()
@@ -244,6 +340,12 @@ def main():
             continue
         elif user_input == "/anti-slop":
             handle_anti_slop_audit()
+            continue
+        elif user_input == "/settings":
+            handle_settings()
+            continue
+        elif user_input == "/scheduler":
+            handle_scheduler()
             continue
         elif user_input == "/n8n":
             wf_path = create_webhook_ai_workflow(name="Otomasi_Baru")

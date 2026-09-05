@@ -23,13 +23,13 @@
   <!-- Header -->
   <header class="bg-slate-900/90 backdrop-blur border-b border-slate-800 px-6 py-3 flex items-center justify-between z-10">
     <div class="flex items-center space-x-3">
-      <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-2xl shadow-lg shadow-cyan-500/10">
-        ðŸ¦–
+      <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shadow-lg shadow-emerald-500/10">
+        <img src="/static/logo.svg" class="w-7 h-7" alt="Rex Code Logo" />
       </div>
       <div>
         <h1 class="font-bold text-lg text-white flex items-center gap-2">
           Rex Code
-          <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 font-medium">v1.0.0</span>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-medium">v1.0.0</span>
         </h1>
         <p class="text-xs text-slate-400">Autonomous AI Coding & Workflow Agent</p>
       </div>
@@ -50,7 +50,7 @@
     <!-- Right: Provider & Model Selector -->
     <div class="flex items-center space-x-3">
       <div class="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
-        <i data-lucide="cpu" class="w-3.5 h-3.5 text-cyan-400"></i>
+        <i data-lucide="cpu" class="w-3.5 h-3.5 text-emerald-400"></i>
         <select id="model-select" onchange="changeModel(this)" class="bg-transparent text-white outline-none cursor-pointer">
           <option class="bg-slate-900">Memuat model...</option>
         </select>
@@ -71,7 +71,7 @@
     <aside class="w-64 flex flex-col border-r border-slate-800 bg-slate-900/70">
       <div class="p-3 border-b border-slate-800 flex items-center justify-between">
         <span class="text-xs font-semibold text-slate-300">Percakapan</span>
-        <button onclick="createSession()" title="Percakapan baru" class="p-1.5 rounded hover:bg-slate-800 text-cyan-400">
+        <button onclick="createSession()" title="Percakapan baru" class="p-1.5 rounded hover:bg-slate-800 text-emerald-400">
           <i data-lucide="square-pen" class="w-4 h-4"></i>
         </button>
       </div>
@@ -96,11 +96,11 @@
       <div id="messages-container" class="flex-1 overflow-y-auto p-6 space-y-4">
         <!-- Welcome Message -->
         <div class="flex gap-3 max-w-3xl">
-          <div class="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-base shrink-0">
-            ðŸ¦–
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0">
+            <img src="/static/logo.svg" class="w-5 h-5" alt="Rex" />
           </div>
           <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-sm leading-relaxed text-slate-200">
-            <p class="font-semibold text-cyan-400 mb-1">Halo! Saya Rex Code, asisten coding dan otomatisasi Anda.</p>
+            <p class="font-semibold text-emerald-400 mb-1">Halo! Saya Rex Code, asisten coding dan otomatisasi Anda.</p>
             <p class="text-slate-300 mb-3">
               Anda tidak perlu bisa coding. Cukup ceritakan apa yang ingin dibuat, saya yang akan menuliskan kodenya, menguji di komputer, atau merancang alur kerja n8n/Activepieces.
             </p>
@@ -126,7 +126,7 @@
             id="chat-input"
             type="text"
             placeholder="Ketik instruksi Anda dalam Bahasa Indonesia..."
-            class="flex-1 bg-slate-950 border border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition"
+            class="flex-1 bg-slate-950 border border-slate-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition"
             autocomplete="off"
           />
           <button type="button" id="stop-btn" onclick="stopAgent()" class="hidden bg-red-700 hover:bg-red-600 text-white px-4 py-3 rounded-xl text-sm font-semibold">Stop</button>
@@ -143,7 +143,7 @@
           <button
             type="submit"
             id="send-btn"
-            class="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-cyan-600/20"
+            class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-600/20"
           >
             <span>Kirim</span>
             <i data-lucide="send" class="w-4 h-4"></i>
@@ -156,7 +156,7 @@
     <aside class="w-96 flex flex-col bg-slate-900/60">
       <!-- Tabs -->
       <div class="flex border-b border-slate-800 px-2 pt-2 bg-slate-900">
-        <button id="tab-files-btn" onclick="switchTab('files')" class="flex-1 py-2 text-xs font-semibold text-cyan-400 border-b-2 border-cyan-400 flex items-center justify-center gap-1.5">
+        <button id="tab-files-btn" onclick="switchTab('files')" class="flex-1 py-2 text-xs font-semibold text-emerald-400 border-b-2 border-emerald-400 flex items-center justify-center gap-1.5">
           <i data-lucide="folder" class="w-3.5 h-3.5"></i>
           <span>Workspace</span>
         </button>
@@ -189,7 +189,7 @@
         <div>
           <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Workflow Otomasi</h3>
           <p class="text-xs text-slate-400 mb-3">File JSON siap import langsung ke dashboard n8n atau Activepieces Anda.</p>
-          <button onclick="createN8nTemplate()" class="w-full py-2 px-3 bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/30 text-cyan-300 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition">
+          <button onclick="createN8nTemplate()" class="w-full py-2 px-3 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition">
             <i data-lucide="plus-circle" class="w-4 h-4"></i>
             <span>Generate Template Webhook AI</span>
           </button>
@@ -202,7 +202,7 @@
       <!-- Tab Content: Viewer -->
       <div id="tab-viewer" class="hidden flex-1 flex flex-col p-4">
         <div class="flex items-center justify-between mb-2">
-          <span id="viewing-filename" class="text-xs font-bold text-cyan-400">Pilih file untuk melihat</span>
+          <span id="viewing-filename" class="text-xs font-bold text-emerald-400">Pilih file untuk melihat</span>
         </div>
         <pre id="code-preview" class="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-300 overflow-auto font-mono">Pilih file dari tab Workspace atau Workflows untuk melihat isi kodenya di sini.</pre>
       </div>

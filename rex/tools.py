@@ -403,6 +403,12 @@ def git_publish(message: str) -> str:
     return f"Berhasil publish '{safe_message}' -> {push_url}"
 
 
+def delegate_to_brachio(task: str, context: str = "") -> str:
+    """Delegasikan tugas kompleks ke sub-agent Brachio untuk eksekusi otonom."""
+    from rex.brachio import BrachioAgent
+    agent = BrachioAgent()
+    return agent.run(task, context)
+
 
 # Schema definitions for LLM Tool Calling
 TOOL_DEFINITIONS = [
@@ -503,6 +509,18 @@ TOOL_DEFINITIONS = [
             },
             "required": ["message"]
         }
+    },
+    {
+        "name": "delegate_to_brachio",
+        "description": "Delegasikan tugas kompleks ke sub-agent Brachio untuk eksekusi otonom (build mode).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "Deskripsi tugas yang akan dieksekusi Brachio"},
+                "context": {"type": "string", "description": "Konteks tambahan untuk membantu Brachio"}
+            },
+            "required": ["task"]
+        }
     }
 ]
 
@@ -517,4 +535,5 @@ TOOL_REGISTRY = {
     "run_command": run_command,
     "git_status": git_status,
     "git_publish": git_publish,
+    "delegate_to_brachio": delegate_to_brachio,
 }
