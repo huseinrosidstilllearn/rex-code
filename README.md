@@ -16,26 +16,6 @@ You think it, Rex builds it. A resilient, secure agent that plans, builds, and d
 
 ---
 
-## 🖼️ Screenshots
-
-> Drop your screenshots into `docs/screenshots/` and reference them here. The placeholders below are ready to be replaced.
-
-| File | Description |
-| --- | --- |
-| `docs/screenshots/dashboard-overview.png` | Full dashboard: chat, Plan/Build toggle, provider selector, file explorer, n8n tab. |
-| `docs/screenshots/plan-mode.png` | PLAN mode output: architecture notes, file tree, safe read-only preview. |
-| `docs/screenshots/build-mode.png` | BUILD mode output: tool calls, file writes, terminal execution, auto-debug loop. |
-| `docs/screenshots/cli-session.png` | CLI session with `/sessions`, `/models`, and `/n8n` commands. |
-
-```markdown
-![Dashboard overview](docs/screenshots/dashboard-overview.png)
-![Plan mode](docs/screenshots/plan-mode.png)
-![Build mode](docs/screenshots/build-mode.png)
-![CLI session](docs/screenshots/cli-session.png)
-```
-
----
-
 ## ✨ What Rex Code Can Do
 
 - **Two modes, one brain.** PLAN mode researches and writes a plan without touching files. BUILD mode writes code, runs commands, and auto-debugs until it works.
