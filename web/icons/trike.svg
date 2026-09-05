@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#2A0808"/>
+  <g fill="none" stroke="#EF4444" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- frill -->
+    <path d="M14 30c-2-6 0-12 6-14 4 0 6 4 6 8"/>
+    <!-- head & horns -->
+    <path d="M20 30l4 4 4-2 4 2 4-2 4 2"/>
+    <!-- top horn -->
+    <path d="M30 24l2-6"/>
+    <!-- body & tail -->
+    <path d="M40 36c6 0 12 4 14 8"/>
+    <!-- legs -->
+    <path d="M22 42v12M34 42v12M46 42v10"/>
+    <!-- eye -->
+    <circle cx="26" cy="28" r="1.6" fill="#EF4444" stroke="none"/>
+    <!-- shield pattern -->
+    <path d="M36 40l4 4M44 42l4 4"/>
+ </g>
+</svg>

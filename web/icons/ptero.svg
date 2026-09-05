@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#06243A"/>
+  <g fill="none" stroke="#3B82F6" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- left wing -->
+    <path d="M30 26L8 16l6 12-4 6 12-2z"/>
+    <!-- right wing -->
+    <path d="M34 26l22-10-6 12 4 6-12-2z"/>
+    <!-- body & head -->
+    <path d="M30 26c-2 4-2 8 0 12l4 8"/>
+    <!-- beak -->
+    <path d="M30 38l-4 6 6 0z"/>
+    <!-- crest -->
+    <path d="M32 22l-2-6 4 0"/>
+    <!-- eye -->
+    <circle cx="32" cy="32" r="1.6" fill="#3B82F6" stroke="none"/>
+ </g>
+</svg>

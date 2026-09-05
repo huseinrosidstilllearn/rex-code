@@ -28,34 +28,70 @@ from rex.automation.n8n_builder import create_webhook_ai_workflow
 from rex.sessions import session_store
 from rex.cli_spinner import spinner, BRAND_GREEN
 from rex.voice import transcribe_audio, VoiceTranscriptionError
+from rex.subagents import get_subagent
 
 console = Console()
 
+
+# ANSI Shadow block-letter "REX CODE" banner in brand green
+_BANNER_LINES = (
+    "██████╗ ███████╗██╗  ██╗     ██████╗ ██████╗ ██████╗ ███████╗",
+    "██╔══██╗██╔════╝╚██╗██╔╝    ██╔════╝██╔═══██╗██╔══██╗██╔════╝",
+    "██████╔╝█████╗   ╚███╔╝     ██║     ██║   ██║██║  ██║█████╗  ",
+    "██╔══██╗██╔══╝   ██╔██╗     ██║     ██║   ██║██║  ██║██╔══╝  ",
+    "██║  ██║███████╗██╔╝ ██╗    ╚██████╗╚██████╔╝██████╔╝███████╗",
+    "╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝     ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝",
+)
+
+
+def print_banner():
+    with tool_spinner("Loading..."):
+        banner = "\n".join(f"[bold #22C55E]{line}[/bold #22C55E]" for line in _BANNER_LINES)
+        banner += "\n[dim]                 Autonomous AI Coding & Workflow Agent  v1.0.0[/dim]"
+        banner += "\n[dim]                      \"You think it, Rex builds it.\"[/dim]"
+        console.print(banner)
+
+
+def print_welcome_panel():
+    """Display a rich welcome panel with mode, provider, model, workspace, and What's New."""
+    pid, _, model = get_active_provider_info()
+    mode = get_active_mode().upper()
+    mode_color = "blue" if mode == "PLAN" else "green"
+
+    info_table = Table.grid(padding=(0, 2))
+    info_table.add_column(style="bold")
+    info_table.add_column()
+    info_table.add_row("Active Mode:", f"[bold {mode_color}]{mode}[/bold {mode_color}]")
+    info_table.add_row("Provider:", f"[cyan]{pid}[/cyan]")
+    info_table.add_row("Active Model:", f"[magenta]{model}[/magenta]")
+    info_table.add_row("Workspace:", f"[dim]{WORKSPACE_DIR}[/dim]")
+
+    whats_new = (
+        "[bold green]What's New in v1.0.0:[/bold green]\n"
+        "• [bold]Dinosaur Sub-agents[/bold]: Specialized read-only advisors\n"
+        "  - [green]Brachio[/green] (Reviewer), [yellow]Raptor[/yellow] (Bug Hunter), [red]Trike[/red] (Security)\n"
+        "  - [cyan]Ptero[/cyan] (Arch & Docs), [magenta]Dilo[/magenta] (Quality & Anti-Slop)\n"
+        "• [bold]Strict Plan Mode Safeguards[/bold]: All delegate sub-agents are analysis-only\n"
+        "• [bold]Visual Restyle[/bold]: Polished block-letter CLI banner and matching SVGs"
+    )
+
+    content = Table.grid(padding=(1, 0))
+    content.add_row(info_table)
+    content.add_row("")
+    content.add_row(whats_new)
+
+    panel = Panel(
+        content,
+        title="[bold #22C55E]Welcome to Rex Code CLI[/bold #22C55E]",
+        border_style="#22C55E",
+        expand=False,
+    )
+    console.print(panel)
 
 
 def tool_spinner(text: str):
     """Context manager: shows a green dino spinner around a tool call."""
     return spinner(console=console, text=text, color=BRAND_GREEN)
-
-
-def print_banner():
-    with tool_spinner("Loading..."):
-        banner = r"""
-[bold cyan]  ____  _______  __   ____ ___  ____  _____ [/bold cyan]
-[bold cyan] |  _ \| ____\ \/ /  / ___/ _ \|  _ \| ____|[/bold cyan]
-[bold cyan] | |_) |  _|  \  /  | |  | | | | | | |  _|  [/bold cyan]
-[bold cyan] |  _ <| |___ /  \  | |__| |_| | |_| | |___ [/bold cyan]
-[bold cyan] |_| \_\_____/_/\_\  \____\___/|____/|_____|[/bold cyan]
-[dim]     Autonomous AI Coding & Workflow Agent  v1.0.0[/dim]
-[dim]     "You think it, Rex builds it."[/dim]
-[dim]
-      __
-     /      ( o  o)
-    |   __|
-    |  |  |
-    \__/  \__[/dim]
-    """
-        console.print(banner)
 
 def show_help():
     table = Table(title="Daftar Perintah Rex Code", show_header=True, header_style="bold magenta")
@@ -227,6 +263,20 @@ def step_callback(event: StepEvent):
     elif event.event_type == "tool_result":
         name = event.data.get("name")
         res = str(event.data.get("result", ""))
+        if name.startswith("delegate_to_"):
+            sub_name = name[len("delegate_to_"):]
+            sub = get_subagent(sub_name)
+            if sub:
+                ascii_face = sub.icon_ascii
+                color = sub.color
+                role = sub.role
+                ascii_lines = ascii_face.split("\n")
+                panel_text = "\n".join(f"[bold {color}]{line}[/bold {color}]" for line in ascii_lines)
+                panel_text += f"\n\n[bold {color}]{sub.name.upper()} REPORT ({role})[/bold {color}]\n"
+                panel_text += "─" * 40 + "\n\n"
+                panel_text += res
+                console.print(Panel(panel_text, title=f"Hasil Tool: {name}", border_style=color))
+                return
         snippet = res if len(res) < 300 else res[:300] + "... (dipotong)"
         console.print(Panel(snippet, title=f"Hasil Tool: {name}", border_style=BRAND_GREEN))
     elif event.event_type == "error":
@@ -299,11 +349,10 @@ def handle_scheduler():
 
 def main():
     print_banner()
+    print_welcome_panel()
     pid, _, model = get_active_provider_info()
     current_session_id = session_store.create(pid, model)["id"]
     agent = RexAgent(current_session_id)
-
-    console.print("[bold green]Selamat datang di Rex Code![/bold green] Ketik [cyan]/help[/cyan] untuk bantuan, atau langsung ketik instruksi Anda.")
 
     while True:
         mode = get_active_mode().upper()

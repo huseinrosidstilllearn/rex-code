@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <rect width="64" height="64" rx="14" fill="#2A1A05"/>
+  <g fill="none" stroke="#F59E0B" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- head & snout -->
+    <path d="M14 22l16-6 8 2 6 6-4 6"/>
+    <!-- body & tail -->
+    <path d="M30 26l4 8 8-2 6 6"/>
+    <!-- legs -->
+    <path d="M28 36l-2 14M36 36l4 14M44 36l6 12"/>
+    <!-- claw arm -->
+    <path d="M32 30c-4 2-6 6-4 8"/>
+    <!-- eye -->
+    <circle cx="24" cy="22" r="1.6" fill="#F59E0B" stroke="none"/>
+    <!-- teeth -->
+    <path d="M16 24l2 2 2-2 2 2"/>
+ </g>
+</svg>

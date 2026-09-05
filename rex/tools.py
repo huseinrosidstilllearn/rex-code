@@ -403,10 +403,49 @@ def git_publish(message: str) -> str:
     return f"Berhasil publish '{safe_message}' -> {push_url}"
 
 
-def delegate_to_brachio(task: str, context: str = "") -> str:
-    """Delegasikan tugas kompleks ke sub-agent Brachio untuk eksekusi otonom."""
-    from rex.brachio import BrachioAgent
-    agent = BrachioAgent()
+def delegate_to_brachio(task: str, focus: str = "", context: str = "") -> str:
+    """Delegasikan tugas analisis (code review, logika, kualitas) ke sub-agent Brachio. Berjalan dalam mode Plan (read-only)."""
+    from rex.subagents import get_subagent
+    agent = get_subagent("brachio")
+    if agent is None:
+        return "Error: sub-agent brachio tidak tersedia."
+    full_task = f"{task}\n\nFocus: {focus}" if focus else task
+    return agent.run(full_task, context)
+
+
+def delegate_to_raptor(task: str, context: str = "") -> str:
+    """Delegasikan tugas bug hunting & analisis traceback ke sub-agent Raptor. Berjalan dalam mode Plan (read-only)."""
+    from rex.subagents import get_subagent
+    agent = get_subagent("raptor")
+    if agent is None:
+        return "Error: sub-agent raptor tidak tersedia."
+    return agent.run(task, context)
+
+
+def delegate_to_trike(task: str, context: str = "") -> str:
+    """Delegasikan audit keamanan (vulnerabilitas, secret leak, injection) ke sub-agent Trike. Berjalan dalam mode Plan (read-only)."""
+    from rex.subagents import get_subagent
+    agent = get_subagent("trike")
+    if agent is None:
+        return "Error: sub-agent trike tidak tersedia."
+    return agent.run(task, context)
+
+
+def delegate_to_ptero(task: str, context: str = "") -> str:
+    """Delegasikan analisis arsitektur & dokumentasi teknis ke sub-agent Ptero. Berjalan dalam mode Plan (read-only)."""
+    from rex.subagents import get_subagent
+    agent = get_subagent("ptero")
+    if agent is None:
+        return "Error: sub-agent ptero tidak tersedia."
+    return agent.run(task, context)
+
+
+def delegate_to_dilo(task: str, context: str = "") -> str:
+    """Delegasikan audit kualitas & anti-slop (boilerplate, buzzword, maintainability) ke sub-agent Dilo. Berjalan dalam mode Plan (read-only)."""
+    from rex.subagents import get_subagent
+    agent = get_subagent("dilo")
+    if agent is None:
+        return "Error: sub-agent dilo tidak tersedia."
     return agent.run(task, context)
 
 
@@ -512,12 +551,61 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "delegate_to_brachio",
-        "description": "Delegasikan tugas kompleks ke sub-agent Brachio untuk eksekusi otonom (build mode).",
+        "description": "Delegasikan analisis kode & logika umum (read-only, mode Plan) ke sub-agent Brachio.",
         "parameters": {
             "type": "object",
             "properties": {
-                "task": {"type": "string", "description": "Deskripsi tugas yang akan dieksekusi Brachio"},
-                "context": {"type": "string", "description": "Konteks tambahan untuk membantu Brachio"}
+                "task": {"type": "string", "description": "Tugas analisis yang akan dijalankan Brachio"},
+                "focus": {"type": "string", "description": "Fokus spesifik analisa (misal: 'performance', 'security review')"},
+                "context": {"type": "string", "description": "Konteks tambahan"}
+            },
+            "required": ["task"]
+        }
+    },
+    {
+        "name": "delegate_to_raptor",
+        "description": "Delegasikan bug hunting & analisis traceback (read-only, mode Plan) ke sub-agent Raptor.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "Tugas bug hunting / traceback analysis"},
+                "context": {"type": "string", "description": "Konteks tambahan (log error, stack trace)"}
+            },
+            "required": ["task"]
+        }
+    },
+    {
+        "name": "delegate_to_trike",
+        "description": "Delegasikan audit keamanan / vulnerability scanning (read-only, mode Plan) ke sub-agent Trike.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "Tugas audit keamanan"},
+                "context": {"type": "string", "description": "Konteks tambahan"}
+            },
+            "required": ["task"]
+        }
+    },
+    {
+        "name": "delegate_to_ptero",
+        "description": "Delegasikan analisis arsitektur & dokumentasi teknis (read-only, mode Plan) ke sub-agent Ptero.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "Tugas analisis arsitektur/dokumentasi"},
+                "context": {"type": "string", "description": "Konteks tambahan"}
+            },
+            "required": ["task"]
+        }
+    },
+    {
+        "name": "delegate_to_dilo",
+        "description": "Delegasikan audit kualitas & anti-slop (read-only, mode Plan) ke sub-agent Dilo.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "Tugas audit kualitas/anti-slop"},
+                "context": {"type": "string", "description": "Konteks tambahan"}
             },
             "required": ["task"]
         }
@@ -536,4 +624,8 @@ TOOL_REGISTRY = {
     "git_status": git_status,
     "git_publish": git_publish,
     "delegate_to_brachio": delegate_to_brachio,
+    "delegate_to_raptor": delegate_to_raptor,
+    "delegate_to_trike": delegate_to_trike,
+    "delegate_to_ptero": delegate_to_ptero,
+    "delegate_to_dilo": delegate_to_dilo,
 }
