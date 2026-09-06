@@ -86,6 +86,7 @@ DEFAULT_CONFIG = {
         "timeout_sec": 120
     },
     "model_costs": {},
+    "token_budget": 0,
     "anti_slop_enabled": True,
     "max_steps": 25,
     "terminal_timeout_sec": 45,
@@ -290,6 +291,16 @@ def normalize_config(cfg: dict) -> dict:
     if not isinstance(model_costs, dict):
         model_costs = {}
     cfg["model_costs"] = model_costs
+
+    # Optional per-session token budget (0 = unlimited). Bool is rejected
+    # explicitly — int(True) would otherwise mean a budget of 1 token.
+    raw_budget = cfg.get("token_budget", 0)
+    if isinstance(raw_budget, bool) or not isinstance(raw_budget, (int, float, str)):
+        raw_budget = 0
+    try:
+        cfg["token_budget"] = max(0, int(float(raw_budget)))
+    except (TypeError, ValueError):
+        cfg["token_budget"] = 0
 
     voice_defaults = DEFAULT_CONFIG["voice"]
     voice = cfg.get("voice")

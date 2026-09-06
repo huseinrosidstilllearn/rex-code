@@ -65,11 +65,21 @@ def _short_count(count: int) -> str:
     return str(count)
 
 
+WARNING_FRACTION = 0.8  # warn at >= 80% of the configured budget
+
+
 class UsageMeter:
-    """Cumulative token/cost accounting for one agent session."""
+    """Cumulative token/cost accounting for one agent session.
+
+    Optional budget guard (config ``token_budget`` = total tokens per
+    session, 0 = off): status turns "warning" at 80% and "exceeded" at
+    100% — the agent refuses the next run once exceeded.
+    """
 
     def __init__(self) -> None:
         self.by_model: Dict[str, Dict[str, int]] = {}
+        self.budget = 0
+        self.warning_fraction = WARNING_FRACTION
         self._model = ""
         self._costs: Dict[str, Dict[str, float]] = {}
         self.refresh_config()
@@ -89,13 +99,51 @@ class UsageMeter:
         return entry
 
     def refresh_config(self) -> None:
-        """Re-read the active model and cost rates from config.json."""
+        """Re-read the active model, cost rates, and token budget."""
+        self.budget = 0
         try:
             cfg = normalize_config(load_config())
             self._model = str(cfg.get("active_model", "") or "")
             self._costs = _model_costs(cfg)
+            raw = cfg.get("token_budget", 0)
+            if not isinstance(raw, bool):
+                self.budget = max(0, int(raw))
         except Exception:
-            self._model, self._costs = "", {}
+            self._model, self._costs, self.budget = "", {}, 0
+
+    # ── budget guard ──────────────────────────────────────────────────
+    def fraction(self) -> float:
+        """Used fraction of the budget; 0.0 when the budget is off."""
+        if self.budget <= 0:
+            return 0.0
+        return self.totals()["total_tokens"] / self.budget
+
+    def status(self) -> str:
+        """One of: 'off' (no budget), 'ok', 'warning' (>=80%), 'exceeded' (>=100%)."""
+        if self.budget <= 0:
+            return "off"
+        frac = self.fraction()
+        if frac >= 1.0:
+            return "exceeded"
+        if frac >= self.warning_fraction:
+            return "warning"
+        return "ok"
+
+    def warning_message(self) -> str:
+        totals = self.totals()
+        pct = int(self.fraction() * 100)
+        return (
+            f"Pemakaian token sesi {totals['total_tokens']:,}/{self.budget:,} ({pct}%) "
+            f"— mendekati batas 'token_budget'."
+        )
+
+    def stop_message(self) -> str:
+        totals = self.totals()
+        return (
+            f"BUDGET TOKEN HABIS: {totals['total_tokens']:,}/{self.budget:,} token terpakai. "
+            f"Agen berhenti. Naikkan 'token_budget' di config.json (atau set 0 untuk tanpa batas), "
+            f"lalu jalankan ulang."
+        )
 
     # ── totals ────────────────────────────────────────────────────────
     def totals(self) -> Dict[str, int]:
@@ -127,6 +175,8 @@ class UsageMeter:
             f"total {totals['total_tokens']:,} token",
             f"~${self.cost_usd():.4f}",
         ]
+        if self.budget > 0:
+            parts.append(f"budget {totals['total_tokens']:,}/{self.budget:,} ({int(self.fraction() * 100)}%)")
         line = " · ".join(parts)
         if len(self.by_model) > 1:
             breakdown = ", ".join(
@@ -141,4 +191,7 @@ class UsageMeter:
         totals = self.totals()
         if totals["total_tokens"] <= 0:
             return ""
-        return f"{_short_count(totals['total_tokens'])} tok · ~${self.cost_usd():.4f}"
+        line = f"{_short_count(totals['total_tokens'])} tok · ~${self.cost_usd():.4f}"
+        if self.budget > 0:
+            line += f" · {int(self.fraction() * 100)}% budget"
+        return line

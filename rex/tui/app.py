@@ -768,6 +768,15 @@ class RexTUIApp(App):
             summary = event.data.get("summary", "")
             status = self.query_one("#status", StatusBar)
             status.update_todo(summary, todos)
+        elif event.event_type == "usage_alert":
+            level = event.data.get("status", "warning")
+            message = event.data.get("message", "")
+            color = "red" if level == "exceeded" else "yellow"
+            chat.write(f"[b {color}]Budget: {message}[/b {color}]")
+            try:
+                self.query_one("#status", StatusBar).update_usage(self.agent.usage.format_footer())
+            except Exception:
+                pass
         elif event.event_type == "error":
             chat.add_error(str(event.data.get("error", "")))
         elif event.event_type == "mode_switch":

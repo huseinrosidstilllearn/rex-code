@@ -320,6 +320,11 @@ def step_callback(event: StepEvent):
     elif event.event_type == "mode_switch":
         mode = event.data.get("mode", "?")
         console.print(f"Beralih ke Mode {mode.upper()}", style="bold blue")
+    elif event.event_type == "usage_alert":
+        level = event.data.get("status", "warning")
+        message = event.data.get("message", "")
+        color = "red" if level == "exceeded" else "yellow"
+        console.print(Panel(message, title="Budget Token", border_style=color))
     elif event.event_type == "done":
         console.print("Selesai.", style=f"bold {BRAND_GREEN}")
 

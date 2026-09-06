@@ -269,6 +269,17 @@ class RexAgent:
         self._abort.clear()
         self._user_persisted_this_run = False
         self.usage.refresh_config()
+        # Budget guard, hard stop: an exhausted token budget refuses the
+        # whole round before any provider call (warning fires post-round).
+        if self.usage.status() == "exceeded":
+            stop = self.usage.stop_message()
+            if on_step:
+                on_step(StepEvent("usage_alert", {
+                    "status": "exceeded", "message": stop,
+                    "totals": self.usage.totals(), "budget": self.usage.budget,
+                }))
+                on_step(StepEvent("done", stop))
+            return stop
         # Scope the agent todo board to this session for todo_write, and
         # surface every board update as a todo_update StepEvent (works for
         # both provider loops — the tools layer fires the write listener).
@@ -321,6 +332,16 @@ class RexAgent:
                     break
 
         if on_step:
+            # Budget guard, soft warning (or just-crossed-100% notice) after
+            # the round completed normally.
+            status = self.usage.status()
+            if status in ("warning", "exceeded"):
+                on_step(StepEvent("usage_alert", {
+                    "status": status,
+                    "message": self.usage.warning_message() if status == "warning" else self.usage.stop_message(),
+                    "totals": self.usage.totals(),
+                    "budget": self.usage.budget,
+                }))
             on_step(StepEvent("done", final_response))
 
         _todos.set_current_session(None)  # run() over: clear the board scope

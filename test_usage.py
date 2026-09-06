@@ -145,6 +145,105 @@ def main():
             agent2._accumulate_usage(FakeUsage(10, 5))
             check("usage persisted to session store", store.load(sid)["usage"]["total_tokens"] == 15)
 
+        # ── 7. token_budget normalization ────────────────────────────────
+        from rex.config import normalize_config
+
+        check("budget default 0", normalize_config({})["token_budget"] == 0)
+        check("budget string accepted", normalize_config({"token_budget": "5000"})["token_budget"] == 5000)
+        check("budget float floored", normalize_config({"token_budget": 2500.7})["token_budget"] == 2500)
+        check("budget negative -> 0", normalize_config({"token_budget": -5})["token_budget"] == 0)
+        check("budget garbage -> 0", normalize_config({"token_budget": "abc"})["token_budget"] == 0)
+        check("budget bool rejected", normalize_config({"token_budget": True})["token_budget"] == 0)
+
+        # ── 8. budget status thresholds ─────────────────────────────────
+        p1, p2 = patched_cfg({"active_model": "m1", "model_costs": {}, "token_budget": 100})
+        with p1, p2:
+            meter = UsageMeter()
+        check("budget loaded from config", meter.budget == 100)
+        check("status ok at start", meter.status() == "ok")
+        meter.accumulate(FakeUsage(79, 0))
+        check("status ok below 80%", meter.status() == "ok")
+        meter.accumulate(FakeUsage(1, 0))
+        check("status warning at exactly 80%", meter.status() == "warning")
+        meter.accumulate(FakeUsage(19, 0))
+        check("status warning below 100%", meter.status() == "warning")
+        meter.accumulate(FakeUsage(1, 0))
+        check("status exceeded at 100%", meter.status() == "exceeded")
+        meter.accumulate(FakeUsage(50, 0))
+        check("status exceeded above 100%", meter.status() == "exceeded")
+        meter.budget = 0
+        check("status off without budget", meter.status() == "off")
+
+        # ── 9. budget messages + formatting ─────────────────────────────
+        meter.budget = 100
+        meter.reset()
+        meter.accumulate(FakeUsage(85, 0))
+        check("warning message has numbers", "85/100" in meter.warning_message() and "(85%)" in meter.warning_message())
+        meter.accumulate(FakeUsage(15, 0))
+        stop = meter.stop_message()
+        check("stop message names config key", "token_budget" in stop and "config.json" in stop)
+        check("summary includes budget", "budget 100/100 (100%)" in meter.format_summary())
+        check("footer includes budget pct", "100% budget" in meter.format_footer())
+
+        # ── 10. agent hard stop when budget exhausted ───────────────────
+        import rex.core as core_mod
+        from rex.core import RexAgent
+        from rex.providers.base import LLMResponse, Usage
+
+        class FakeRouter:
+            def __init__(self, usage=None):
+                self._usage = usage
+
+            def chat(self, messages, system_prompt, tools=None):
+                return LLMResponse(content="ok", usage=self._usage)
+
+        def budget_patches():
+            return [
+                patch.object(core_mod, "build_context_prefix", return_value=""),
+                patch("rex.core.maybe_compact", return_value=(None, False)),
+                patch("rex.core.load_config", return_value={"max_history_messages": 40, "stream_enabled": False, "max_steps": 5, "anti_slop_enabled": False}),
+                patch("rex.usage.load_config", return_value={"token_budget": 100, "active_model": "m1"}),
+                patch("rex.usage.normalize_config", side_effect=lambda c: c),
+            ]
+
+        with patch("rex.core.session_store", store):
+            agent = RexAgent()
+            agent.usage.budget = 100
+            agent.usage.accumulate(FakeUsage(120, 0))
+            events = []
+            all_patches = [patch.object(core_mod, "get_llm_provider_with_fallback", side_effect=RuntimeError("provider must not be called"))] + budget_patches()
+            with all_patches[0], all_patches[1], all_patches[2], all_patches[3], all_patches[4], all_patches[5]:
+                out = agent.run("halo", on_step=events.append)
+            check("exhausted budget stops the run", "BUDGET TOKEN HABIS" in out)
+            kinds = [e.event_type for e in events]
+            check("stop emits usage_alert + done", "usage_alert" in kinds and "done" in kinds and "tool_call" not in kinds)
+            alert = next(e for e in events if e.event_type == "usage_alert")
+            check("stop alert flagged exceeded", alert.data.get("status") == "exceeded")
+
+            # ── 11. agent warning + post-round exceeded ─────────────────
+            agent.reset()
+            agent.usage.accumulate(FakeUsage(80, 0))  # exactly 80% -> warning
+            events = []
+            all_patches = [patch.object(core_mod, "get_llm_provider_with_fallback", return_value=(FakeRouter(), [("gemini", "m1")]))] + budget_patches()
+            with all_patches[0], all_patches[1], all_patches[2], all_patches[3], all_patches[4], all_patches[5]:
+                out = agent.run("halo", on_step=events.append)
+            check("warning run still answers", out == "ok")
+            alert = next(e for e in events if e.event_type == "usage_alert")
+            check("warning alert fired", alert.data.get("status") == "warning" and "80/100" in alert.data.get("message", ""))
+
+            agent.reset()
+            agent.usage.accumulate(FakeUsage(99, 0))  # round pushes past 100%
+            events = []
+            all_patches = [patch.object(core_mod, "get_llm_provider_with_fallback", return_value=(FakeRouter(Usage(5, 5)), [("gemini", "m1")]))] + budget_patches()
+            with all_patches[0], all_patches[1], all_patches[2], all_patches[3], all_patches[4], all_patches[5]:
+                out = agent.run("halo", on_step=events.append)
+            check("crossing 100% mid-run still completes", out == "ok")
+            alert = next(e for e in events if e.event_type == "usage_alert")
+            check("post-round exceeded alert", alert.data.get("status") == "exceeded")
+            all_patches = budget_patches()
+            with all_patches[0], all_patches[1], all_patches[2], all_patches[3], all_patches[4]:
+                check("next run now stops", "BUDGET TOKEN HABIS" in agent.run("lagi"))
+
     print("\nAll usage checks PASS")
 
 

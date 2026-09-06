@@ -336,6 +336,7 @@ A green run means it is safe to push.
 - [x] **Agent todo list** — `todo_write` tool + live progress in the status bar; board persisted per session (`.rex/todos/`), `/todos` to inspect
 - [x] **`apply_patch`** — unified-diff tool (multi-file, create/delete, fuzzy context matching like `patch(1)`); atomic: a mismatched hunk writes nothing
 - [x] **`/cost` + usage meter** — session token/cost accounting moved into `rex/usage.py`: per-model breakdown, `model_costs`-driven estimate, live `1.8k tok · ~$0.0021` status-bar footer, richer `/cost` summary
+- [x] **Token budget guard** — set `token_budget` (total tokens per session, 0 = off): yellow warning at 80%, hard stop at 100% — the next run is refused before any provider call until the budget is raised
 
 **Next — must-haves for a serious native agent (prioritized)**
 
