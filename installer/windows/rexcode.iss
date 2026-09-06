@@ -66,19 +66,20 @@ Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Comment: "Launch {#AppName}"; Tasks: desktopicon
 
 ; 'Open Rex Code here' — directory background + right-click on a folder
+; NOTE: Inno escapes embedded quotes by DOUBLING them ("" not \")
 [Registry]
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\OpenRexCode"; \
     ValueType: string; ValueName: "MUIVerb"; ValueData: "Open Rex Code here"; Tasks: explorermenu
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\OpenRexCode"; \
     ValueType: string; ValueName: "Icon"; ValueData: "{app}\icon.ico"; Tasks: explorermenu
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\OpenRexCode\command"; \
-    ValueType: string; ValueName: ""; ValueData: "\"{app}\rex-here.cmd\" \"%1\""; Tasks: explorermenu
+    ValueType: string; ValueName: ""; ValueData: """{app}\rex-here.cmd"" ""%1"""; Tasks: explorermenu
 Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\OpenRexCode"; \
     ValueType: string; ValueName: "MUIVerb"; ValueData: "Open Rex Code here"; Tasks: explorermenu
 Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\OpenRexCode"; \
     ValueType: string; ValueName: "Icon"; ValueData: "{app}\icon.ico"; Tasks: explorermenu
 Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\OpenRexCode\command"; \
-    ValueType: string; ValueName: ""; ValueData: "\"{app}\rex-here.cmd\" \"%V\""; Tasks: explorermenu
+    ValueType: string; ValueName: ""; ValueData: """{app}\rex-here.cmd"" ""%V"""; Tasks: explorermenu
 
 [Registry]
 ; Append {app} to the system PATH (deduplicated via NeedsAddPath)
@@ -92,7 +93,7 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; \
 
 [UninstallRun]
 ; Remove the Explorer menu entries when the task was selected (HKCU keys)
-Filename: "{cmd}"; Parameters: "/C reg delete \"HKCU\Software\Classes\Directory\shell\OpenRexCode\" /f >nul 2>&1 & reg delete \"HKCU\Software\Classes\Directory\Background\shell\OpenRexCode\" /f >nul 2>&1"; Flags: runhidden; Tasks: explorermenu
+Filename: "{cmd}"; Parameters: "/C reg delete ""HKCU\Software\Classes\Directory\shell\OpenRexCode"" /f >nul 2>&1 & reg delete ""HKCU\Software\Classes\Directory\Background\shell\OpenRexCode"" /f >nul 2>&1"; Flags: runhidden; Tasks: explorermenu
 
 [UninstallDelete]
 ; User data lives in %LOCALAPPDATA%\RexCode. It survives uninstall while
