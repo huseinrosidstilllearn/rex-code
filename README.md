@@ -48,6 +48,16 @@ All user data lives in `%LOCALAPPDATA%\RexCode\` (config, sessions, logs, downlo
 | **🧹 Anti-slop guardrail** | Strips AI clichés (`leverage`, `tapestry`, `game changer`) from output. |
 | **💾 Local sessions** | History survives restarts; secrets are redacted before persistence. |
 
+### 📦 Install via package manager (Windows)
+
+```powershell
+winget install RexCodeTeam.RexCode        # after the winget-pkgs PR is merged
+scoop bucket add extras; scoop install rexcode   # after the Extras PR is merged
+```
+
+Manifests live in [`packaging/`](packaging/README.md) and are regenerated
+automatically per release.
+
 ---
 
 ## 🛠️ From Source
@@ -242,11 +252,12 @@ sensitive files · secrets redacted before persistence · cooperative abort betw
 python run_all_checks.py
 ```
 
-**28 mock-driven suites** — foundations, streaming, OpenAI-compatible wire formats,
+**29 mock-driven suites** — foundations, streaming, OpenAI-compatible wire formats,
 sessions + redaction, config schema, sandbox (Win+POSIX), git_publish scenarios, voice
 engines, plugins, webhooks (HMAC, PR flow, HTTP host), the update engine (versions, cache,
-anti-loop, download safety), and the scheduler (cron semantics incl. weekday offset,
-row contract, history cap, minute dedup). A green run means it is safe to push.
+anti-loop, download safety), the scheduler (cron semantics incl. weekday offset,
+row contract, history cap, minute dedup), and the distribution manifests
+(winget/scoop render integrity vs `rex/__init__.py` + `rexcode.iss`). A green run means it is safe to push.
 
 ---
 
@@ -288,10 +299,11 @@ row contract, history cap, minute dedup). A green run means it is safe to push.
 - [x] **'Open Rex Code here'** — Explorer right-click menu + project-scoped mode (REX_WORKSPACE)
 - [x] **Post-update changelog** — release notes shown once after updating
 - [x] **Webhook HTTP host** — `rex --serve-webhook` / `python -m rex.webhost`: stdlib `ThreadingHTTPServer` exposing the review engine at `POST /webhook/github` (+ `/healthz`), no new dependencies, deny-by-default
+- [x] **winget/scoop manifests** — auto-generated per release (`packaging/`), CI attaches them to the release; PR to the public registries is the last manual step
 
 **Next — must-haves for a serious native agent (prioritized)**
 
-- [ ] **winget/scoop distribution + code signing** — kill SmartScreen warnings for good
+- [ ] **Code signing** — kill SmartScreen warnings for good (SignPath Foundation, in application)
 
 ---
 

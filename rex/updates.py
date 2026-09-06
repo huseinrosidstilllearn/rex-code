@@ -263,7 +263,10 @@ def verify_checksum(installer_path: Path, checksums_path: Path) -> Optional[bool
                 continue
             expected, filename = parts
             filename = filename.lstrip("*").strip()
-            if filename.lower() == installer_path.name.lower():
+            # Tolerate path prefixes in checksum entries (an artifact
+            # subfolder name, for example) — compare the basename only.
+            entry_name = filename.replace("\\", "/").rsplit("/", 1)[-1].strip().lower()
+            if entry_name == installer_path.name.lower():
                 return expected.strip().lower() == digest
         return None
     except Exception as exc:

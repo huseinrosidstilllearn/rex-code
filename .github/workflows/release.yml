@@ -123,7 +123,9 @@ jobs:
         shell: bash
         run: |
           cd artifacts
-          find . -type f \( -name '*.exe' -o -name '*.zip' \) -print0 | xargs -0 sha256sum | sed 's#  \./#  #' > SHA256SUMS.txt
+          # Plain asset names (no artifact subfolder prefix): both the app's
+          # updater and the scoop/winget manifests match on the basename.
+          find . -type f \( -name '*.exe' -o -name '*.zip' \) -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Attach checksums to release
@@ -131,3 +133,56 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/SHA256SUMS.txt
+
+  distribution-manifests:
+    # Regenerate winget/scoop manifests for the tagged release so they can
+    # never go stale, and attach them to the release for easy submission.
+    needs: windows-installer
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read app version
+        id: ver
+        shell: pwsh
+        run: |
+          $line = Select-String -Path rex/__init__.py -Pattern '__version__\s*=\s*"([^"]+)"'
+          $v = $line.Matches[0].Groups[1].Value
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "App version: $v"
+
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer
+          path: installer-artifact
+
+      - name: Generate manifests from the built installer
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem installer-artifact -Filter '*.exe' | Select-Object -First 1
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          Write-Host "installer: $($exe.Name) sha256=$hash"
+          python packaging/generate_manifests.py --sha256 $hash --version ${{ steps.ver.outputs.version }}
+
+      - name: Validate winget manifests (best-effort)
+        # winget may be absent on the runner; never block a release on this.
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          if (Get-Command winget -ErrorAction SilentlyContinue) {
+            winget validate --manifest packaging/winget
+          } else {
+            Write-Host "winget not available on runner — skipped structural validation"
+          }
+
+      - name: Self-check manifests
+        run: python test_packaging.py
+
+      - name: Attach manifests to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            packaging/winget/*.yaml
+            packaging/scoop/rexcode.json

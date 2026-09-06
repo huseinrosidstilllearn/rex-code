@@ -1,5 +1,6 @@
 """Self-check for the auto-update engine. Run: python test_updates.py"""
 
+import hashlib
 import json
 import sys
 import tempfile
@@ -18,6 +19,7 @@ from rex.updates import (
     install_update,
     maybe_update,
     pick_asset,
+    verify_checksum,
 )
 from rex.config import normalize_config
 
@@ -117,6 +119,25 @@ def main():
     with patch.object(updates.httpx, "stream") as mock_stream:
         check("disallowed filename never hits network", download_asset("https://github.com/x/evil.exe", dest) is None)
         mock_stream.assert_not_called()
+
+    # ── 4b. verify_checksum: basename tolerance + edge cases ─────────
+    installer = dest / "RexCode-Setup-v0.2.0-x64.exe"
+    setup_file = tmp / "SHA256SUMS.txt"
+    real_digest = hashlib.sha256(installer.read_bytes()).hexdigest()
+    setup_file.write_text(
+        f"{real_digest}  windows-installer/{installer.name}\n"
+        f"{'0' * 64}  rex-linux-x64.zip\n",
+        encoding="utf-8",
+    )
+    check("verify: path prefix in entry still matches (regression v0.2.0)",
+          verify_checksum(installer, setup_file) is True)
+    setup_file.write_text(f"{real_digest}  {installer.name}\n", encoding="utf-8")
+    check("verify: plain name still matches", verify_checksum(installer, setup_file) is True)
+    setup_file.write_text(f"{'0' * 64}  windows-installer/{installer.name}\n", encoding="utf-8")
+    check("verify: prefix + wrong hash -> False", verify_checksum(installer, setup_file) is False)
+    setup_file.write_text(f"{real_digest}  other-file.exe\n", encoding="utf-8")
+    check("verify: no entry -> None (fail-safe)", verify_checksum(installer, setup_file) is None)
+    check("verify: missing checksums file -> None", verify_checksum(installer, tmp / "nope.txt") is None)
 
     # ── 5. check_for_update: cache + flags ───────────────────────────
     with patch.object(updates, "CACHE_FILE", cache_file):

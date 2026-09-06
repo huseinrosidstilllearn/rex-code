@@ -35,6 +35,7 @@ CHECKS = [
     "test_ecosystem.py",
     "test_codeindex.py",
     "test_phase9.py",
+    "test_packaging.py",
 ]
 
 

@@ -95,6 +95,29 @@ Dilakukan **sekali** saat pertama kali, lalu tiap kali mau merilis versi baru.
 3. **Buat API key Gemini** di `aistudio.google.com` dan isi `.env` (Bagian A langkah 3)
    supaya Rex bisa diuji di komputer sendiri.
 
+### D.4. Manifest winget & Scoop (distribusi via package manager)
+
+CI otomatis membuat manifest `winget` + `scoop` untuk setiap tag rilis dan
+menempelkannya ke halaman *Releases* (job `distribution-manifests`). Untuk
+menyinkronkan salinan di repo (agar `run_all_checks.py` tetap hijau):
+
+```
+python packaging/generate_manifests.py --fetch
+python test_packaging.py
+git add packaging && git commit -m "chore: manifests for v0.x.y"
+```
+
+Agar bisa dipasang lewat `winget install RexCodeTeam.RexCode` / `scoop
+install rexcode`, manifest harus di-merge ke repo publik:
+
+- **winget-pkgs**: salin 3 file YAML ke
+  `manifests/r/RexCodeTeam/RexCode/<versi>/` di fork `microsoft/winget-pkgs`,
+  lalu buka Pull Request.
+- **Scoop Extras**: tambahkan `rexcode.json` di fork
+  `ScoopInstaller/Extras`, lalu buka Pull Request.
+
+Detail: [`packaging/README.md`](packaging/README.md).
+
 ### D.2. Rilis versi baru (tiap kali, ~3 menit)
 
 1. Naikkan versi di **satu tempat** saja — `rex/__init__.py`:

@@ -1,0 +1,40 @@
+{
+    "version": "0.2.0",
+    "description": "Autonomous AI coding agent — plan, build, and self-debug with a sandboxed tool layer",
+    "homepage": "https://github.com/huseinrosidstilllearn/rex-code",
+    "license": {
+        "identifier": "MIT",
+        "url": "https://github.com/huseinrosidstilllearn/rex-code/blob/master/LICENSE"
+    },
+    "architecture": {
+        "64bit": {
+            "url": "https://github.com/huseinrosidstilllearn/rex-code/releases/download/v0.2.0/RexCode-Setup-v0.2.0-x64.exe",
+            "hash": "d484dc1a9551d6fd774984a7df9960e0f3b63ea3fccfb8a7a2ed1367a1f57a28"
+        }
+    },
+    "innosetup": true,
+    "bin": [
+        [
+            "rex.exe",
+            "rex"
+        ]
+    ],
+    "shortcuts": [
+        [
+            "rex.exe",
+            "Rex Code"
+        ]
+    ],
+    "checkver": "github",
+    "autoupdate": {
+        "architecture": {
+            "64bit": {
+                "url": "https://github.com/huseinrosidstilllearn/rex-code/releases/download/v$version/RexCode-Setup-v$version-x64.exe"
+            }
+        },
+        "hash": {
+            "url": "https://github.com/huseinrosidstilllearn/rex-code/releases/download/v$version/SHA256SUMS.txt",
+            "regex": "(?m)^$sha256.*?$basename"
+        }
+    }
+}
