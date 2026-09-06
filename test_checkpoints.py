@@ -86,6 +86,42 @@ def main():
     table = checkpoints.format_checkpoints_table()
     check("table lists hash+message", "suite: v2" in table and "Hash" in table)
 
+    # ── Rewind: timeline restore ──────────────────────────────────────
+    probe.write_text("v3", encoding="utf-8")
+    h3 = checkpoints.snapshot("suite: v3")
+    check("three snapshots now", len([e for e in checkpoints.list_checkpoints() if e["message"].startswith("suite:")]) == 3)
+    check("timeline numbered", checkpoints.format_timeline().splitlines()[2].strip().startswith("1."))
+
+    check("rewind zero rejected", checkpoints.rewind(0) is None)
+    check("rewind negative rejected", checkpoints.rewind(-1) is None)
+    check("rewind garbage rejected", checkpoints.rewind("x") is None)
+
+    result = checkpoints.rewind(2)  # v3 -> v1
+    check("rewind returns target", bool(result and result["restored"]))
+    check("rewind restored content", probe.read_text(encoding="utf-8") == "v1")
+    check("rewind pushes redo entry", len(checkpoints._read_redo_stack()) >= 1)
+    result = checkpoints.redo()
+    check("redo after rewind restores", probe.read_text(encoding="utf-8") == "v3")
+
+    result = checkpoints.rewind(1)  # v3 -> v2
+    check("rewind one step", probe.read_text(encoding="utf-8") == "v2")
+    checkpoints.redo()
+
+    # Rewind beyond history is refused
+    entries_count = len(checkpoints._full_hashes(100))
+    check("rewind too far refused", checkpoints.rewind(entries_count + 5) is None)
+
+    # Dirty worktree is auto-saved, never lost
+    probe.write_text("v4-uncommitted", encoding="utf-8")
+    result = checkpoints.rewind(1)
+    check("dirty rewind works", bool(result))
+    check("dirty changes land on redo stack", bool(checkpoints._read_redo_stack()))
+    saved = checkpoints.redo()
+    check("redo recovers uncommitted work", probe.read_text(encoding="utf-8") == "v4-uncommitted")
+    # clean up the extra auto-save state
+    checkpoints.rewind(1)
+    checkpoints.redo()
+
     probe.unlink()
     print("\nCheckpoint checks PASS")
 

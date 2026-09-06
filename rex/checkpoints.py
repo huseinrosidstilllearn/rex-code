@@ -234,6 +234,52 @@ def redo() -> Optional[dict]:
         return None
 
 
+def _full_hashes(limit: int) -> List[str]:
+    """Newest-first full commit hashes of the shadow history."""
+    result = _run("log", f"-n{max(1, limit)}", "--pretty=format:%H", check=False)
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def rewind(steps: int = 1) -> Optional[dict]:
+    """
+    Roll the workspace back N checkpoints in the timeline (1 = one back).
+
+    Uncommitted worktree changes are auto-saved into a REWIND snapshot
+    first, so nothing is ever lost; the abandoned state (old tip) lands
+    on the redo stack — a single ``/redo`` restores it. Returns
+    {"restored", "saved", "steps"} or None when impossible.
+    """
+    if not _initialized():
+        return None
+    try:
+        steps = int(steps)
+    except (TypeError, ValueError):
+        return None
+    if steps < 1:
+        return None
+    try:
+        dirty = bool(_run("status", "--porcelain", check=False).stdout.strip())
+        if dirty:
+            snapshot("REWIND — auto-saved before rollback")
+            # The auto-save sits on top; going N real checkpoints back from
+            # the *pre-snapshot* state means index N + 1 in the new history.
+            hashes = _full_hashes(steps + 2)
+            offset = steps + 1
+        else:
+            hashes = _full_hashes(steps + 1)
+            offset = steps
+        if len(hashes) <= offset:
+            return None  # not enough history to rewind into
+        old_tip = head_hash()
+        target = hashes[offset]
+        _run("reset", "--hard", target)
+        if old_tip and old_tip != target:
+            _push_redo(old_tip)
+        return {"restored": target, "saved": old_tip, "steps": steps}
+    except Exception:
+        return None
+
+
 def label_for_action(action: str, summary: str) -> str:
     return f"{action}: {summary}"[:120]
 
@@ -247,6 +293,20 @@ def format_checkpoints_table() -> str:
     lines = ["Hash      Waktu                Keterangan", "-" * 70]
     for entry in entries:
         lines.append(f"{entry['hash']:<9} {entry['time'][:19]}  {entry['message']}")
+    return "\n".join(lines)
+
+
+def format_timeline(limit: int = 12) -> str:
+    """Numbered newest-first timeline for /rewind: index 1 = newest."""
+    entries = list_checkpoints(limit)
+    if not entries:
+        return "(belum ada checkpoint — jalankan aksi BUILD dulu)"
+    lines = [
+        "Timeline checkpoint (terbaru dulu) — /rewind <n> untuk kembali:",
+        "-" * 74,
+    ]
+    for index, entry in enumerate(entries, 1):
+        lines.append(f"{index:>3}. {entry['hash']:<9} {entry['time'][:16]}  {entry['message'][:44]}")
     return "\n".join(lines)
 
 

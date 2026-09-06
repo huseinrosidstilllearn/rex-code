@@ -296,6 +296,7 @@ class CommandPalette(Container):
             ("/theme rose", "Rose theme"),
             ("/resume", "Continue a past session"),
             ("/new", "Start a fresh session"),
+            ("/rewind", "Restore an older checkpoint"),
             ("/help", "Show help"),
             ("/exit", "Exit Rex Code"),
         ]
@@ -740,6 +741,21 @@ class RexTUIApp(App):
                 board = get_todos(self.session_id)
                 chat.write(f"[b]Agent todos[/b] [dim]{summary(board)}[/dim]")
                 chat.write(format_board(board))
+            elif cmd == "/rewind":
+                arg = arguments.strip()
+                if not arg.isdigit():
+                    from rex.checkpoints import format_timeline
+                    chat.write(format_timeline())
+                else:
+                    from rex.checkpoints import rewind
+                    result = rewind(int(arg))
+                    if result:
+                        chat.write(
+                            f"[green]Workspace dikembalikan {result['steps']} checkpoint "
+                            f"ke {result['restored'][:9]}[/green] [dim]— /redo untuk membatalkan[/dim]"
+                        )
+                    else:
+                        chat.write("[yellow]Tidak bisa rewind (riwayat kurang / tidak ada checkpoint).[/yellow]")
             elif cmd == "/undo":
                 from rex.checkpoints import undo
                 result = undo()
@@ -788,6 +804,7 @@ class RexTUIApp(App):
         chat.write(f"  [b]/new[/b]       Start a fresh session (old one is kept)")
         chat.write(f"  [b]/init[/b]      Create REX.md project instructions")
         chat.write(f"  [b]/checkpoints[/b] List automatic snapshots")
+        chat.write(f"  [b]/rewind[/b]     Restore an older checkpoint (/rewind <n>)")
         chat.write(f"  [b]/todos[/b]     Show the agent todo board for this session")
         chat.write(f"  [b]/undo[/b]      Roll workspace back one checkpoint")
         chat.write(f"  [b]/redo[/b]      Re-apply the last undo")

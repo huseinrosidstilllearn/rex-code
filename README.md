@@ -354,6 +354,7 @@ A green run means it is safe to push.
 - [x] **Token budget guard** — set `token_budget` (total tokens per session, 0 = off): yellow warning at 80%, hard stop at 100% — the next run is refused before any provider call until the budget is raised
 - [x] **Pre/PostToolUse hooks** — `.rex/hooks.json` runs your commands around every tool call: exit 2 on `PreToolUse` denies the call (stdout = reason), `PostToolUse` stdout is fed back to the model; sandboxed, fail-open, covers built-in + plugin + MCP tools
 - [x] **Session resume** — crash recovery auto-resumes the interrupted conversation on next start; `/resume` lists the last 8 sessions and `/resume <n>` switches with full history reloaded; `/new` starts fresh; clean exits are marked so they never trigger recovery
+- [x] **`/rewind` timeline** — numbered checkpoint timeline with one-command restore: `/rewind <n>` rolls the workspace back N checkpoints; uncommitted work is auto-saved and `/redo` reverses the rewind
 
 **Next — must-haves for a serious native agent (prioritized)**
 
