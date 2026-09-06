@@ -889,6 +889,17 @@ TOOL_DEFINITIONS = [
         }
     },
     {
+        "name": "load_skill",
+        "description": "Memuat instruksi lengkap sebuah skill on-demand (daftar skill ada di system prompt). Aktif di PLAN & BUILD.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Nama skill (misal: release-checklist)"}
+            },
+            "required": ["name"]
+        }
+    },
+    {
         "name": "git_status",
         "description": "Melihat ringkasan status git (branch, staged/unstaged/untracked). Aktif di PLAN & BUILD.",
         "parameters": {"type": "object", "properties": {}, "required": []}
@@ -1004,6 +1015,16 @@ TOOL_DEFINITIONS = [
     }
 ]
 
+
+def load_skill(name: str) -> str:
+    """Muat isi skill on-demand dari .rex/skills/<name>/SKILL.md (PLAN & BUILD)."""
+    from rex.skills import get_skill
+    skill = get_skill(str(name or "").strip())
+    if skill is None:
+        return f"Error: skill '{name}' tidak ditemukan. Lihat daftar skill di system prompt (section Skills)."
+    return f"Skill '{skill['name']}' — {skill['description']}\n\n{skill['body']}"
+
+
 TOOL_REGISTRY = {
     "read_file": read_file,
     "write_file": write_file,
@@ -1027,4 +1048,14 @@ TOOL_REGISTRY = {
     "task_kill": task_kill,
     "web_search": web_search,
     "web_fetch": web_fetch,
+    "load_skill": load_skill,
 }
+
+
+def _load_skill_entry(name: str) -> str:
+    """Muat isi skill on-demand dari .rex/skills/<name>/SKILL.md (PLAN & BUILD)."""
+    from rex.skills import get_skill
+    skill = get_skill(str(name or "").strip())
+    if skill is None:
+        return f"Error: skill '{name}' tidak ditemukan. Lihat daftar skill di system prompt (section Skills)."
+    return f"Skill '{skill['name']}' — {skill['description']}\n\n{skill['body']}"

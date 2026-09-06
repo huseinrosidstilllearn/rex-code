@@ -252,6 +252,15 @@ def build_context_prefix(mode: str = "") -> str:
             )
             blocks.append(f"=== Project Rules (.rex/rules/) ===\n{rendered}")
 
+    if settings.get("skills", True):
+        try:
+            from rex.skills import format_skills_overview
+            overview = format_skills_overview()
+        except Exception:
+            overview = ""
+        if overview:
+            blocks.append(f"=== Skills Tersedia ===\n{overview}")
+
     if settings.get("repo_map", True):
         repo_map = build_repo_map()
         if repo_map:

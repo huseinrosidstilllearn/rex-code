@@ -815,6 +815,31 @@ class RexTUIApp(App):
             elif cmd == "/doctor":
                 from rex.review import format_doctor
                 chat.write(format_doctor())
+            elif cmd == "/skills":
+                from rex.skills import load_skills
+                skills = load_skills()
+                if not skills:
+                    chat.write("[yellow]Belum ada skill (.rex/skills/<name>/SKILL.md).[/yellow]")
+                else:
+                    chat.write(f"[b]Skills[/b] [dim]{len(skills)} tersedia — jalankan dengan /skill <name>[/dim]")
+                    for skill in skills.values():
+                        chat.write(f"  [b]{skill['name']}[/b] [dim]{skill['description']}[/dim]")
+            elif cmd.startswith("/skill"):
+                rest = text[len("/skill"):].strip()
+                parts = rest.split(None, 1)
+                name = parts[0] if parts else ""
+                extra = parts[1].strip() if len(parts) > 1 else ""
+                from rex.skills import get_skill, load_skills
+                skill = get_skill(name) if name else None
+                if skill is None:
+                    chat.write("[dim]Usage: /skill <name> [argumen] — /skills untuk daftar[/dim]")
+                    for skill_item in load_skills():
+                        chat.write(f"  [b]{skill_item['name']}[/b] [dim]{skill_item['description']}[/dim]")
+                else:
+                    chat.write(f"[dim]Skill {skill['name']} dimuat — menjalankan…[/dim]")
+                    prompt = skill["body"] + (f"\n\nArgumen: {extra}" if extra else "")
+                    chat.add_user_message(prompt)
+                    self.run_agent(prompt)
             elif cmd == "/export":
                 arg = (arguments or "md").strip().lower().lstrip(".") or "md"
                 if not self.session_id:
@@ -917,6 +942,8 @@ class RexTUIApp(App):
         chat.write(f"  [b]/checkpoints[/b] List automatic snapshots")
         chat.write(f"  [b]/rewind[/b]     Restore an older checkpoint (/rewind <n>)")
         chat.write(f"  [b]/todos[/b]     Show the agent todo board for this session")
+        chat.write(f"  [b]/skills[/b]    List on-demand skills (.rex/skills/)")
+        chat.write(f"  [b]/skill[/b]     Run a skill: /skill <name> [args]")
         chat.write(f"  [b]/undo[/b]      Roll workspace back one checkpoint")
         chat.write(f"  [b]/redo[/b]      Re-apply the last undo")
         chat.write(f"  [b]/theme <n>[/b] Change theme: rex mono amber cyan violet rose custom")
