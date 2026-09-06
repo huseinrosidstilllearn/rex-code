@@ -127,4 +127,64 @@ with patch("rex.tools.get_active_mode", return_value="build"), \
     result = run_command("python slow.py")
 check("configured timeout reported", "7 detik" in result)
 
+# ── Background tasks: gates mirror run_command ───────────────────────
+from rex.tools import run_command_bg, task_output, task_kill
+from rex.shell import is_windows
+
+with patch("rex.tools.get_active_mode", return_value="plan"), \
+     patch("rex.tools.subprocess.Popen") as popen:
+    result = run_command_bg("python server.py")
+check("bg plan mode blocks start", "TIDAK DIIZINKAN" in result and not popen.called)
+
+for command in (r"Remove-Item -Recurse -Force C:\Users", "sudo rm -rf /", "Get-Content .env"):
+    with patch("rex.tools.get_active_mode", return_value="build"), \
+         patch("rex.tools.subprocess.Popen") as popen:
+        result = run_command_bg(command)
+    check(f"bg blocked: {command}", "DIBLOKIR" in result and not popen.called)
+
+with patch("rex.tools.get_active_mode", return_value="build"), \
+     patch("rex.tools.request_approval", return_value=False), \
+     patch("rex.tools.subprocess.Popen") as popen:
+    result = run_command_bg("python server.py")
+check("bg approval gate enforced", "DITOLAK PENGGUNA" in result and not popen.called)
+
+fakes = {f"bg_{i:06d}": {"status": "running", "killed": False, "returncode": None,
+                         "started_at": 0.0, "finished_at": None, "log": "x", "proc": None,
+                         "command": "sleep", "thread": None} for i in range(8)}
+with patch("rex.tools.get_active_mode", return_value="build"), \
+     patch("rex.tools.request_approval", return_value=True), \
+     patch("rex.tools._checkpoints.snapshot", return_value="h"), \
+     patch("rex.tools._bg_tasks", fakes), \
+     patch("rex.tools.subprocess.Popen") as popen:
+    result = run_command_bg("python another.py")
+check("bg active-task cap enforced", "maks 8" in result and not popen.called)
+
+with patch("rex.tools.get_active_mode", return_value="build"), \
+     patch("rex.tools.request_approval", return_value=True) as approval, \
+     patch("rex.tools._checkpoints.snapshot", return_value="h") as snap, \
+     patch("rex.tools.subprocess.Popen"):
+    result = run_command_bg("python server.py")
+check("bg approval + checkpoint fired", approval.call_count == 1 and snap.call_count == 1)
+
+# ── Background tasks: real subprocess lifecycle ──────────────────────
+with patch("rex.tools.get_active_mode", return_value="build"):
+    result = run_command_bg("echo bg-ready")
+check("bg start returns task id", result.startswith("[bg_") and "task_output" in result)
+task_id = result[1:result.index("]")]
+
+out = task_output(task_id, wait_seconds=10)
+check("bg task completes", "status=finished" in out and "exit=0" in out)
+check("bg output captured", "bg-ready" in out)
+
+check("bg unknown task lists ids", "tidak ditemukan" in task_output("bg_nope") and task_id in task_output("bg_nope"))
+
+long_cmd = "Start-Sleep -Seconds 5" if is_windows() else "sleep 5"
+with patch("rex.tools.get_active_mode", return_value="build"):
+    result = run_command_bg(long_cmd)
+task_id = result[1:result.index("]")]
+out = task_output(task_id)
+check("bg running status readable", "status=running" in out)
+killed = task_kill(task_id)
+check("bg kill stops task", "dihentikan" in killed and "status=killed" in task_output(task_id))
+
 print("\nAll command guardrail checks passed.")

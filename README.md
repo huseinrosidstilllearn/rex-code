@@ -176,6 +176,7 @@ Each hook receives `{"tool", "args"}` (before) or `{"tool", "args", "result"}` (
 | `read_file` `list_dir` `search_files` `search_content` | PLAN & BUILD | Read and explore the workspace. |
 | `write_file` `edit_file` `delete_file` `apply_patch` | BUILD only | Create and modify files — `apply_patch` takes a full unified diff (multi-file, create/delete) and aborts atomically on a mismatched hunk. |
 | `run_command` | BUILD only | Sandboxed shell (PowerShell / bash). |
+| `run_command_bg` `task_output` `task_kill` | BUILD to start | Long-running commands detached from the round: start in background, tail output, kill. |
 | `git_status` `git_publish` | BUILD for publish | Stage → secret-scan → commit → push. |
 | `todo_write` | PLAN & BUILD | Agent task board — plan steps and mark progress; shown live in the status bar. |
 | `delegate_to_brachio` / `raptor` / `trike` / `ptero` / `dilo` | PLAN only | Sub-agent specialists (read-only). |
@@ -355,6 +356,7 @@ A green run means it is safe to push.
 - [x] **Pre/PostToolUse hooks** — `.rex/hooks.json` runs your commands around every tool call: exit 2 on `PreToolUse` denies the call (stdout = reason), `PostToolUse` stdout is fed back to the model; sandboxed, fail-open, covers built-in + plugin + MCP tools
 - [x] **Session resume** — crash recovery auto-resumes the interrupted conversation on next start; `/resume` lists the last 8 sessions and `/resume <n>` switches with full history reloaded; `/new` starts fresh; clean exits are marked so they never trigger recovery
 - [x] **`/rewind` timeline** — numbered checkpoint timeline with one-command restore: `/rewind <n>` rolls the workspace back N checkpoints; uncommitted work is auto-saved and `/redo` reverses the rewind
+- [x] **Background shell tasks** — `run_command_bg` starts long-running commands (dev servers, builds) without blocking the conversation; `task_output` tails output (optional wait up to 30s) and `task_kill` stops them; same sandbox, approval gate and checkpoint as `run_command`, max 8 concurrent
 
 **Next — must-haves for a serious native agent (prioritized)**
 

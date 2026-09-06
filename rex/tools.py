@@ -7,7 +7,10 @@ Enforces mode permissions (Plan Mode = read only, Build Mode = write + execute).
 import os
 import re
 import subprocess
+import threading
+import time
 import unicodedata
+import uuid
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from rex.config import WORKSPACE_DIR, WORKFLOWS_DIR, get_active_mode, load_config
@@ -306,6 +309,177 @@ def run_command(command: str) -> str:
         return f"Error: Perintah melampaui batas waktu (timeout {timeout} detik)."
     except Exception as e:
         return f"Error eksekusi: {str(e)}"
+
+
+# --- Background shell tasks -------------------------------------------------
+# Long-running commands (dev servers, builds, test suites) started detached
+# from the agent round. Same start-time sandbox as run_command: plan gate,
+# denylist scan, approval gate + checkpoint. Output streams to a log file
+# under logs/bg_tasks/ and is tailed by task_output. Tasks live for the
+# current process only (TUI/CLI session).
+
+BG_TASKS_DIRNAME = "bg_tasks"
+MAX_BG_TASKS = 8
+BG_OUTPUT_MAX_CHARS = 8000
+
+_bg_lock = threading.RLock()
+_bg_tasks: Dict[str, Dict[str, Any]] = {}
+
+
+def _bg_dir() -> Path:
+    from rex.config import LOGS_DIR
+    directory = Path(LOGS_DIR) / BG_TASKS_DIRNAME
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _bg_watch(task_id: str) -> None:
+    """Thread body: wait for the process, then finalize the entry."""
+    entry = _bg_tasks[task_id]
+    try:
+        code = entry["proc"].wait()
+    except Exception:
+        code = -1
+    with _bg_lock:
+        entry["returncode"] = code
+        entry["finished_at"] = time.time()
+        if entry.get("killed"):
+            entry["status"] = "killed"
+        else:
+            entry["status"] = "finished" if code == 0 else "failed"
+
+
+def run_command_bg(command: str) -> str:
+    """Memulai perintah jangka panjang di background (Hanya Mode Build)."""
+    mode = get_active_mode()
+    if mode == "plan":
+        return "TIDAK DIIZINKAN: Anda sedang berada di Mode Plan. Eksekusi terminal hanya diizinkan di Mode Build."
+
+    if not isinstance(command, str) or not command.strip():
+        return "Error: Perintah kosong."
+
+    blocked_reason = _blocked_reason(command)
+    if blocked_reason:
+        return f"DIBLOKIR KEAMANAN: {blocked_reason}."
+
+    summary = f"background: {command}"
+    if not request_approval("run_command", summarize_action("run_command", {"command": summary})):
+        return "DITOLAK PENGGUNA: eksekusi background ini tidak disetujui. Jangan coba lagi tanpa instruksi baru."
+    _checkpoint_before("run_command", summarize_action("run_command", {"command": summary}))
+
+    with _bg_lock:
+        active = sum(1 for item in _bg_tasks.values() if item["status"] == "running")
+        if active >= MAX_BG_TASKS:
+            return (
+                f"Error: sudah ada {active} task background berjalan (maks {MAX_BG_TASKS}). "
+                "Pantau/akhiri dengan task_output atau task_kill dulu."
+            )
+        task_id = f"bg_{uuid.uuid4().hex[:6]}"
+
+    log_path = _bg_dir() / f"{task_id}.log"
+    try:
+        with open(log_path, "w", encoding="utf-8", errors="replace") as sink:
+            proc = subprocess.Popen(
+                build_command_argv(command),
+                cwd=WORKSPACE_DIR,
+                stdout=sink,
+                stderr=subprocess.STDOUT,
+                text=True,
+                env=_sanitized_environment(),
+            )
+    except Exception as exc:
+        return f"Error start background: {str(exc)}"
+
+    entry = {
+        "id": task_id,
+        "command": command,
+        "proc": proc,
+        "status": "running",
+        "killed": False,
+        "returncode": None,
+        "started_at": time.time(),
+        "finished_at": None,
+        "log": str(log_path),
+    }
+    with _bg_lock:
+        _bg_tasks[task_id] = entry
+    thread = threading.Thread(target=_bg_watch, args=(task_id,), daemon=True)
+    entry["thread"] = thread
+    thread.start()
+
+    cfg = load_config()
+    allowlist = {str(item).lower() for item in cfg.get("command_allowlist", [])}
+    executable_match = re.match(r"^\s*(?:&\s*)?[\"']?([^\s\"']+)", _normalized_command(command))
+    executable = Path(executable_match.group(1)).stem.lower() if executable_match else ""
+    hint = f"\n[PERINTAH NON-STANDAR: {executable or 'tidak diketahui'}]" if allowlist and executable not in allowlist else ""
+    return (
+        f"[{task_id}] berjalan di background{hint}. "
+        f"Pantau dengan task_output(task_id=\"{task_id}\") atau akhiri dengan task_kill(task_id=\"{task_id}\")."
+    )
+
+
+def _bg_find(task_id: str) -> Optional[dict]:
+    with _bg_lock:
+        return _bg_tasks.get(str(task_id or "").strip())
+
+
+def _bg_tail(entry: dict) -> str:
+    try:
+        content = Path(entry["log"]).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return "(output belum tersedia)"
+    content = content.strip()
+    if not content:
+        return "(belum ada output)"
+    if len(content) > BG_OUTPUT_MAX_CHARS:
+        content = content[-BG_OUTPUT_MAX_CHARS:]
+        return "...[DIPOTONG]\n" + content
+    return content
+
+
+def task_output(task_id: str = "", wait_seconds: int = 0) -> str:
+    """Baca output terbaru sebuah task background (boleh di PLAN & BUILD)."""
+    entry = _bg_find(task_id)
+    if entry is None:
+        with _bg_lock:
+            known = sorted(_bg_tasks) or ["(kosong)"]
+        return f"Error: task '{task_id}' tidak ditemukan. Task tersedia: {', '.join(known)}"
+
+    try:
+        wait = max(0, min(30, int(wait_seconds or 0)))
+    except (TypeError, ValueError):
+        wait = 0
+    deadline = time.time() + wait
+    while entry["status"] == "running" and time.time() < deadline:
+        time.sleep(0.1)
+
+    elapsed = (entry["finished_at"] or time.time()) - entry["started_at"]
+    header = f"[{task_id}] status={entry['status']} ({elapsed:.1f}s) — {entry['command'][:100]}"
+    if entry["status"] == "running" and wait > 0:
+        header += " [masih berjalan setelah menunggu]"
+    if entry["returncode"] is not None:
+        header += f" exit={entry['returncode']}"
+    return f"{header}\n\n{_bg_tail(entry)}"
+
+
+def task_kill(task_id: str = "") -> str:
+    """Hentikan sebuah task background (Hanya Mode Build)."""
+    entry = _bg_find(task_id)
+    if entry is None:
+        with _bg_lock:
+            known = sorted(_bg_tasks) or ["(kosong)"]
+        return f"Error: task '{task_id}' tidak ditemukan. Task tersedia: {', '.join(known)}"
+    if entry["status"] != "running":
+        return f"[{task_id}] sudah selesai (status={entry['status']}, exit={entry['returncode']})."
+    entry["killed"] = True
+    try:
+        entry["proc"].kill()
+    except Exception:
+        pass
+    thread = entry.get("thread")
+    if thread:
+        thread.join(timeout=2)
+    return f"[{task_id}] dihentikan (output tersimpan di {entry['log']})."
 
 
 # --- Git Auto-Publish Tools -------------------------------------------------
@@ -658,6 +832,40 @@ TOOL_DEFINITIONS = [
         }
     },
     {
+        "name": "run_command_bg",
+        "description": "Memulai perintah jangka panjang di background (dev server, build, test suite) tanpa memblokir percakapan (Hanya Mode Build).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "command": {"type": "string", "description": "Perintah yang dijalankan di background"}
+            },
+            "required": ["command"]
+        }
+    },
+    {
+        "name": "task_output",
+        "description": "Membaca output terbaru task background; opsional menunggu beberapa detik sampai selesai. Aktif di PLAN & BUILD.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "ID task dari run_command_bg (misal: bg_a1b2c3)"},
+                "wait_seconds": {"type": "integer", "description": "Tunggu maksimal (0-30 detik) sampai task selesai"}
+            },
+            "required": ["task_id"]
+        }
+    },
+    {
+        "name": "task_kill",
+        "description": "Menghentikan task background yang masih berjalan (Hanya Mode Build).",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "string", "description": "ID task yang akan dihentikan"}
+            },
+            "required": ["task_id"]
+        }
+    },
+    {
         "name": "git_status",
         "description": "Melihat ringkasan status git (branch, staged/unstaged/untracked). Aktif di PLAN & BUILD.",
         "parameters": {"type": "object", "properties": {}, "required": []}
@@ -791,4 +999,7 @@ TOOL_REGISTRY = {
     "delegate_to_dilo": delegate_to_dilo,
     "todo_write": todo_write,
     "apply_patch": apply_patch,
+    "run_command_bg": run_command_bg,
+    "task_output": task_output,
+    "task_kill": task_kill,
 }
