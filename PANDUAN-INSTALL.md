@@ -7,7 +7,7 @@ Semua langkah di bawah ini hanya perlu dilakukan **sekali**.
 
 ## Bagian A — Memasang Rex Code di komputer (pengguna akhir)
 
-1. **Jalankan installer** `RexCode-Setup-v0.2.0-x64.exe`.
+1. **Jalankan installer** `RexCode-Setup-v0.3.0-x64.exe`.
    - Klik **Next** → pilih folder (default `C:\Program Files\RexCode`) → pilih opsi:
      - ☐ Ikon Desktop
      - ☐ Add to PATH (biar bisa ketik `rex` di terminal mana pun)

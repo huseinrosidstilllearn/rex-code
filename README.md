@@ -9,7 +9,7 @@
 You think it, Rex builds it. PLAN before you act, BUILD when you approve —
 with a sandboxed tool layer, sub-agent specialists, and one-click installer.
 
-[![Release](https://img.shields.io/badge/Release-v0.2.0-22C55E?logo=github)](https://github.com/huseinrosidstilllearn/rex-code/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v0.3.0-22C55E?logo=github)](https://github.com/huseinrosidstilllearn/rex-code/releases/latest)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](#-from-source)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?logo=windows)](#-from-source)
 [![License](https://img.shields.io/badge/License-MIT-8B5CF6)](LICENSE)
@@ -22,7 +22,7 @@ with a sandboxed tool layer, sub-agent specialists, and one-click installer.
 
 ## 🚀 Quick Install (Windows)
 
-1. Download **`RexCode-Setup-v0.2.0-x64.exe`** from [Releases](https://github.com/huseinrosidstilllearn/rex-code/releases/latest).
+1. Download **`RexCode-Setup-v0.3.0-x64.exe`** from [Releases](https://github.com/huseinrosidstilllearn/rex-code/releases/latest).
 2. Run it — if SmartScreen appears: **More info → Run anyway** (normal for unsigned open-source apps; see [guide](PANDUAN-INSTALL.md)).
 3. Follow the wizard (EN/🇮🇩), then launch **Rex Code** from the Start Menu.
 4. First run: put `GEMINI_API_KEY=...` in `%LOCALAPPDATA%\RexCode\.env` ([free key](https://aistudio.google.com)) — Rex shows you exactly where when it starts.
@@ -55,6 +55,10 @@ sh assets/linux/setup.sh     # app-menu entry + hicolor icons + 'rex' on PATH
 | **🔒 Security rails** | Path traversal, sensitive files, dangerous commands, and secret leaks are blocked by default. |
 | **🎨 Native TUI** | Claude-Code-style terminal app with 7 themes, streaming, markdown, command palette (Ctrl+P). |
 | **📦 Installer + auto-update** | Real EXE installer (Inno Setup) with daily self-update from GitHub Releases. |
+| **⚙️ Background tasks** | `run_command_bg` runs dev servers/builds detached; `task_output` tails, `task_kill` stops — the conversation never blocks. |
+| **🪝 Lifecycle hooks** | `.rex/hooks.json` runs your commands around every tool call; exit 2 on PreToolUse denies it. |
+| **🌐 Web research** | `web_search` + `web_fetch` (DuckDuckGo, no API key) — SSRF-safe, domain allowlist, secret-redacted. |
+| **📚 Skills on-demand** | `<name>/SKILL.md` instruction packs the model loads when relevant — `/skills`, `/skill <name>`. |
 | **🧹 Anti-slop guardrail** | Strips AI clichés (`leverage`, `tapestry`, `game changer`) from output. |
 | **💾 Local sessions** | History survives restarts; secrets are redacted before persistence. |
 
@@ -97,7 +101,14 @@ Native TUI: `python rex/tui/cli_entry.py` · Classic CLI: `python cli.py`
 | `/n8n` | Generate webhook-AI workflow JSON for n8n/Activepieces. |
 | `/scheduler` | View cron jobs, trigger manually. |
 | `/anti-slop` | Audit & clean AI clichés in your text. |
-| `/cost` | Token usage for this session (prompt / completion / total). |
+| `/cost` | Session usage meter: tokens per model, cost estimate, budget status. |
+| `/resume` `<n>` | Continue a past session (crash recovery is automatic). |
+| `/rewind` `<n>` | Restore an older checkpoint from the timeline. |
+| `/status` | Health report across every subsystem. |
+| `/compare` | Ask several providers the same question, side-by-side. |
+| `/export` `md\|html` | Save this session to a portable file. |
+| `/skills` `/skill <name>` | List / run on-demand skill packs. |
+| `/plugins` | Installed plugins: version, permissions, status. |
 | `/init` | Create `REX.md` — project instructions Rex reads every session. |
 | `/checkpoints` `/undo` `/redo` | Inspect & roll back automatic BUILD-action snapshots. |
 | `/todos` | Show the agent todo board for this session. |
@@ -138,11 +149,13 @@ Exit code 0 on success, 1 on provider failure. `--json` emits `{response, mode, 
 
 ### Project context (REX.md + repo map)
 
-Rex automatically injects two context sources into every system prompt:
+Rex automatically injects context into every system prompt:
 - **`REX.md`** in your project root (create with `/init`) plus an optional global one in the Rex data dir — conventions, prohibitions, test commands.
+- **Layered rules** — `.rex/rules/*.md` in the root applies everywhere; a subfolder's own `.rex/rules/*.md` applies when working inside it.
+- **Skills overview** — available `.rex/skills/<name>/SKILL.md` packs are listed so the model can load one on demand.
 - **Repo map** — top-level structure, language stats, and key files; deterministic and always fresh.
 
-Both can be toggled in `config.json → context`. Long sessions are auto-compacted: older turns get LLM-summarized into a memory note instead of being truncated (`context.max_context_tokens`, default 60k).
+All can be toggled in `config.json → context`. Long sessions are auto-compacted: older turns get LLM-summarized into a memory note instead of being truncated (`context.max_context_tokens`, default 60k).
 
 ### MCP servers (stdio)
 
@@ -298,13 +311,17 @@ sensitive files · secrets redacted before persistence · cooperative abort betw
 python run_all_checks.py
 ```
 
-**30 mock-driven suites** — foundations, streaming, OpenAI-compatible wire formats,
-sessions + redaction, config schema, sandbox (Win+POSIX), git_publish scenarios, voice
-engines, plugins, webhooks (HMAC, PR flow, HTTP host), the update engine (versions, cache,
+**39 mock-driven suites** — foundations, streaming, OpenAI-compatible wire formats,
+sessions + redaction + resume, config schema, sandbox (Win+POSIX) incl. background
+tasks, git_publish scenarios + worktree delegates, voice engines, plugins (v2 manifests,
+permissions), webhooks (HMAC, PR flow, HTTP host), the update engine (versions, cache,
 anti-loop, download safety), the scheduler (cron semantics incl. weekday offset,
 row contract, history cap, minute dedup), the distribution manifests
-(winget/scoop render integrity vs `rex/__init__.py` + `rexcode.iss`), and brand-asset
-integrity (icon formats, installer wizard art, Linux desktop files vs the asset pack).
+(winget/scoop render integrity vs `rex/__init__.py` + `rexcode.iss`), brand-asset
+integrity (icon formats, installer wizard art, Linux desktop files vs the asset pack),
+plus the 0.3.0 additions: usage meter + budget guard, Pre/PostToolUse hooks,
+`/status` aggregation, web tools (SSRF + redaction), `@file:symbol` spans,
+multi-model compare, session export, layered rules, and skills.
 A green run means it is safe to push.
 
 ---
@@ -367,8 +384,11 @@ A green run means it is safe to push.
 - [x] **Parallel delegates via git worktrees** — `delegate_parallel` runs up to 3 sub-agents concurrently, each in its own isolated worktree as a headless Rex child (writes only touch the copy); the worktree is removed afterwards and its diff is returned for review — applying it goes through `apply_patch`'s approval gate + checkpoint
 - [x] **Plugins API v2** — optional `plugin.toml` manifest per plugin (name, version, description, explicit `permissions` from `net|shell|fs|env`); `plugins.blocked_permissions` in config fail-closes any plugin declaring a blocked permission; `/plugins` renders the installed table with version, permissions and status; manifest-less plugins keep loading as legacy
 
-**Next — must-haves for a serious native agent (prioritized)**
+**Next — polish for the v0.3.x line (prioritized)**
 
+- [ ] **Onboarding wizard** — first-run flow: pick provider → paste key → test → write `.env` (mode 600)
+- [ ] **i18n UI (EN/ID)** — `/lang` switch backed by `rex/i18n.py`
+- [ ] **Version resource + provenance** — `rex.exe` file metadata + build provenance attestation in `release.yml`
 - [ ] **Code signing** — kill SmartScreen warnings for good (SignPath Foundation, in application)
 
 ---
