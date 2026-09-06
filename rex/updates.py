@@ -29,6 +29,7 @@ Security:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import platform
@@ -49,6 +50,7 @@ CACHE_FILE = LOGS_DIR / "last_update_check.json"
 _SETUP_RE = re.compile(r"^RexCode-Setup-v\d+\.\d+\.\d+-x64\.exe$", re.IGNORECASE)
 _LINUX_RE = re.compile(r"^rex-linux-x64\.zip$", re.IGNORECASE)
 _MACOS_RE = re.compile(r"^rex-macos-arm64\.zip$", re.IGNORECASE)
+_CHECKSUMS_RE = re.compile(r"^SHA256SUMS\.txt$", re.IGNORECASE)
 
 # A real installer is at least a few MB; anything smaller is suspicious.
 _MIN_ASSET_BYTES = 1_000_000
@@ -191,8 +193,73 @@ def download_asset(url: str, dest_dir: Path, timeout: float = 60.0) -> Optional[
 
 def _asset_name_allowed(name: str) -> bool:
     return bool(
-        _SETUP_RE.match(name) or _LINUX_RE.match(name) or _MACOS_RE.match(name)
+        _SETUP_RE.match(name)
+        or _LINUX_RE.match(name)
+        or _MACOS_RE.match(name)
+        or _CHECKSUMS_RE.match(name)
     )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Checksum verification (SHA256SUMS.txt published by CI)
+# ──────────────────────────────────────────────────────────────────────
+
+def _download_raw(url: str, dest_dir: Path, timeout: float = 60.0) -> Optional[Path]:
+    """Download a small companion file (e.g. SHA256SUMS.txt) without the
+    min-size rule that applies to installers. Never raises."""
+    name = url.rsplit("/", 1)[-1]
+    if not _asset_name_allowed(name):
+        return None
+    try:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        response = httpx.get(url, timeout=timeout, follow_redirects=True)
+        if response.status_code != 200 or not response.content:
+            return None
+        path = dest_dir / name
+        path.write_bytes(response.content)
+        return path
+    except Exception as exc:
+        log.debug(f"update: checksum download failed: {exc}")
+        return None
+
+
+def download_checksums(release: Dict, dest_dir: Path, timeout: float = 60.0) -> Optional[Path]:
+    """Download SHA256SUMS.txt from the release. None when unavailable."""
+    for asset in release.get("assets") or []:
+        name = str(asset.get("name", ""))
+        url = str(asset.get("browser_download_url", ""))
+        if _CHECKSUMS_RE.match(name) and url.startswith("https://"):
+            if any(host in url for host in _ALLOWED_ASSET_HOSTS):
+                return _download_raw(url, dest_dir, timeout)
+    return None
+
+
+def verify_checksum(installer_path: Path, checksums_path: Path) -> Optional[bool]:
+    """
+    Compare the installer's SHA256 against SHA256SUMS.txt.
+    True = verified, False = MISMATCH (treat as tampered/corrupt),
+    None = cannot verify (file missing, no entry for this asset).
+    Never raises.
+    """
+    try:
+        if not installer_path.is_file() or not checksums_path.is_file():
+            return None
+        digest = hashlib.sha256(installer_path.read_bytes()).hexdigest()
+        for line in checksums_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split(None, 1)
+            if len(parts) != 2:
+                continue
+            expected, filename = parts
+            filename = filename.lstrip("*").strip()
+            if filename.lower() == installer_path.name.lower():
+                return expected.strip().lower() == digest
+        return None
+    except Exception as exc:
+        log.debug(f"update: checksum verify failed: {exc}")
+        return None
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -325,6 +392,31 @@ def maybe_update(
         )
         if not installer:
             return
+
+        # Integrity gate: verify SHA256 before anything may execute the file.
+        sums = download_checksums(release, download_dir)
+        if sums is not None:
+            verdict = verify_checksum(installer, sums)
+            if verdict is False:
+                try:
+                    installer.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                log.warning("update: checksum MISMATCH — installer discarded")
+                on_notice("Unduhan gagal verifikasi checksum dan telah dibuang. Unduh manual dari halaman Releases.")
+                return
+            if verdict is None:
+                # Checksums file exists but no entry for this asset -> fail-safe.
+                log.warning("update: entri checksum tidak ditemukan — auto-install dilewati")
+                on_notice(f"Installer v{newer} siap: {installer.name} (checksum tidak diverifikasi — jalankan manual bila yakin)")
+                return
+            log.debug("update: checksum verified OK")
+        else:
+            # No SHA256SUMS.txt on this release: do not auto-execute. Fail-safe.
+            log.warning("update: SHA256SUMS.txt tidak tersedia — auto-install dilewati")
+            on_notice(f"Installer v{newer} siap: {installer.name} (rilis belum menyertakan checksum — jalankan manual)")
+            return
+
         on_notice(f"Installer v{newer} siap: {installer.name}")
 
         cache = _read_cache()

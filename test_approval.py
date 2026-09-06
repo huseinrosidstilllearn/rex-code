@@ -138,8 +138,8 @@ def main():
     cfg2 = normalize_config({})
     check("defaults: approval off", cfg2["approval"]["enabled"] is False and cfg2["approval"]["actions"] == [])
 
-    # ── 10. All five destructive actions are gated by default ─────────
-    check("destructive set complete", set(DESTRUCTIVE_ACTIONS) == {"write_file", "edit_file", "delete_file", "run_command", "git_publish"})
+    # ── 10. All destructive actions (incl. external tools) are gated ──
+    check("destructive set complete", set(DESTRUCTIVE_ACTIONS) == {"write_file", "edit_file", "delete_file", "run_command", "git_publish", "mcp_tool", "plugin_tool"})
 
     print("\nApproval checks PASS")
 

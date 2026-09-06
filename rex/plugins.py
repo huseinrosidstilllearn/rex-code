@@ -36,14 +36,52 @@ Broken plugins are isolated: they log a warning and never crash the agent.
 """
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from typing import Callable, Dict, List, Tuple
 
+from rex.approval import request_approval
 from rex.config import PLUGINS_DIR, load_config, normalize_config
 from rex.logging_setup import log
 from rex.mcp import mcp_tool_definitions as _mcp_definitions
 from rex.mcp import mcp_tool_registry as _mcp_registry
+
+
+def _gate_external_tool(name: str, handler: Callable, action: str, meta: dict) -> Callable:
+    """Wrap an external tool (MCP server / plugin) behind the approval gate.
+
+    External code can do anything, so it is gated like built-in destructive
+    tools (when approval is enabled; disabled = fail-open, unchanged).
+    Errors are returned to the model with secret-looking values redacted.
+    """
+
+    def gated(**kwargs):
+        summary_args = {"tool": name, **meta, "args": str(kwargs)[:120]}
+        if not request_approval(action, _summarize(action, summary_args)):
+            return f"DITOLAK PENGGUNA: eksekusi tool '{name}' tidak disetujui."
+        try:
+            return handler(**kwargs)
+        except Exception as exc:
+            return f"Error tool '{name}': {_redact(str(exc))[:400]}"
+
+    gated.__name__ = f"gated_{action}_{name}"
+    return gated
+
+
+def _summarize(action: str, args: dict) -> str:
+    from rex.approval import summarize_action
+    return summarize_action(action, args)
+
+
+def _redact(text: str) -> str:
+    """Replace secret-looking substrings (keys/tokens) with <REDACTED>."""
+    from rex.approval import SECRET_MARKERS
+    pattern = re.compile(
+        r"(?:" + "|".join(SECRET_MARKERS) + r")['\"\s:=]+[A-Za-z0-9_\-./+]{8,}",
+        re.IGNORECASE,
+    )
+    return pattern.sub("<REDACTED>", text)
 
 
 def _discover_plugin_files() -> List[Path]:
@@ -159,11 +197,13 @@ def plugin_tool_definitions() -> List[dict]:
 
 
 def plugin_registry() -> Dict[str, Callable]:
-    """Map tool name -> handler for every loaded plugin tool."""
+    """Map tool name -> approval-gated handler for every loaded plugin tool."""
     registry: Dict[str, Callable] = {}
     for plugin in load_plugins().values():
         for tool in plugin["tools"]:
-            registry[tool["name"]] = tool["handler"]
+            registry[tool["name"]] = _gate_external_tool(
+                tool["name"], tool["handler"], "plugin_tool", {"plugin": tool.get("plugin", "?")}
+            )
     return registry
 
 
@@ -179,11 +219,15 @@ def effective_tool_definitions() -> List[dict]:
 
 
 def effective_tool_registry() -> Dict[str, Callable]:
-    """Built-in tool handlers plus plugin and MCP tool handlers."""
+    """Built-in tool handlers plus approval-gated plugin and MCP tool handlers."""
     from rex.tools import TOOL_REGISTRY
     registry = {**TOOL_REGISTRY, **plugin_registry()}
     try:
-        registry.update(_mcp_registry())
+        for name, handler in _mcp_registry().items():
+            server = getattr(handler, "_rex_server", "?")
+            registry[name] = _gate_external_tool(
+                getattr(handler, "_rex_tool", name), handler, "mcp_tool", {"server": server}
+            )
     except Exception:
-        pass
+        pass  # MCP must never break tool execution
     return registry

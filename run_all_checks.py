@@ -26,6 +26,7 @@ CHECKS = [
     "test_checkpoints.py",
     "test_compaction.py",
     "test_mcp.py",
+    "test_security.py",
 ]
 
 

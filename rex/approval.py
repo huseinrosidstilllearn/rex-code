@@ -48,7 +48,13 @@ _override_settings: Optional[dict] = None
 _session_allows: Dict[str, list] = {}
 _allows_lock = threading.Lock()
 
-DESTRUCTIVE_ACTIONS = ("write_file", "edit_file", "delete_file", "run_command", "git_publish")
+DESTRUCTIVE_ACTIONS = (
+    "write_file", "edit_file", "delete_file", "run_command", "git_publish",
+    "mcp_tool", "plugin_tool",  # external code: gated like built-in destructive tools
+)
+
+# Key-name markers used to redact secrets from summaries, logs, and output.
+SECRET_MARKERS = ("API_KEY", "TOKEN", "SECRET", "PASSWORD", "PRIVATE_KEY", "CREDENTIAL")
 
 
 def set_provider(provider: Optional[Callable[[str, str], bool]]) -> None:
@@ -150,4 +156,9 @@ def summarize_action(action: str, args: dict) -> str:
         return f"jalankan perintah: {command[:120]}"
     if action == "git_publish":
         return f"commit & push: {str(args.get('message', ''))[:80]}"
+    if action == "mcp_tool":
+        return (f"eksekusi tool MCP '{args.get('tool', '?')}' (server: {args.get('server', '?')}): "
+                f"{str(args.get('args', ''))[:120]}")
+    if action == "plugin_tool":
+        return f"eksekusi tool plugin '{args.get('tool', '?')}': {str(args.get('args', ''))[:120]}"
     return f"{action} {args}"

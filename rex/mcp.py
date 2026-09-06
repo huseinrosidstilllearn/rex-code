@@ -253,4 +253,8 @@ def _make_handler(server_name: str, tool_name: str):
 
     handler.__name__ = f"mcp_{_sanitize(server_name)}_{_sanitize(tool_name)}"
     handler.__doc__ = f"Call MCP tool '{tool_name}' on server '{server_name}'."
+    # Metadata consumed by the approval gate in rex.plugins (never trust the
+    # sanitized registry key to recover the original names).
+    handler._rex_server = server_name
+    handler._rex_tool = tool_name
     return handler

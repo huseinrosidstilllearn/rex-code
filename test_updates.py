@@ -152,24 +152,52 @@ def main():
             check("disabled -> None", check_for_update({**SETTINGS, "enabled": False}) is None)
             m.assert_not_called()
 
-    # ── 6. maybe_update: full flow, anti-loop, flags ────────────────
+    # ── 6. maybe_update: full flow, checksum gate, anti-loop, flags ──
     with patch.object(updates, "CACHE_FILE", cache_file):
         notices = []
         installed = []
         cache_file.write_text("{}", encoding="utf-8")
         with patch.object(updates, "check_for_update", return_value="0.2.0"), \
              patch.object(updates, "get_latest_release", return_value={**RELEASE_NEWER, "assets": [good_exe]}), \
-             patch.object(updates, "download_asset", return_value=dest / "RexCode-Setup-v0.2.0-x64.exe"):
+             patch.object(updates, "download_asset", return_value=dest / "RexCode-Setup-v0.2.0-x64.exe"), \
+             patch.object(updates, "download_checksums", return_value=tmp / "SHA256SUMS.txt"), \
+             patch.object(updates, "verify_checksum", return_value=True):
             maybe_update({**SETTINGS, "auto_download": True, "auto_install": True,
                           "download_dir": str(dest)}, notices.append, installed.append)
         check("notice emitted", any("0.2.0" in n for n in notices))
-        check("installer handed to install hook", len(installed) == 1)
+        check("installer handed to install hook (checksum verified)", len(installed) == 1)
         check("anti-loop marker stored", json.loads(cache_file.read_text())["installed_version"] == "0.2.0")
+
+        # checksum mismatch: installer discarded, never executed
+        notices_bad, installed_bad = [], []
+        with patch.object(updates, "check_for_update", return_value="0.2.0"), \
+             patch.object(updates, "get_latest_release", return_value={**RELEASE_NEWER, "assets": [good_exe]}), \
+             patch.object(updates, "download_asset", return_value=dest / "RexCode-Setup-v0.2.0-x64.exe"), \
+             patch.object(updates, "download_checksums", return_value=tmp / "SHA256SUMS.txt"), \
+             patch.object(updates, "verify_checksum", return_value=False):
+            maybe_update({**SETTINGS, "auto_download": True, "auto_install": True,
+                          "download_dir": str(dest)}, notices_bad.append, installed_bad.append)
+        check("checksum mismatch -> no install", len(installed_bad) == 0)
+        check("checksum mismatch -> installer discarded", not (dest / "RexCode-Setup-v0.2.0-x64.exe").exists())
+        check("checksum mismatch -> warning notice", any("checksum" in n.lower() for n in notices_bad))
+
+        # release without SHA256SUMS.txt: fail-safe, never auto-executes
+        notices_nos, installed_nos = [], []
+        with patch.object(updates, "check_for_update", return_value="0.2.0"), \
+             patch.object(updates, "get_latest_release", return_value={**RELEASE_NEWER, "assets": [good_exe]}), \
+             patch.object(updates, "download_asset", return_value=dest / "RexCode-Setup-v0.2.0-x64.exe"), \
+             patch.object(updates, "download_checksums", return_value=None):
+            maybe_update({**SETTINGS, "auto_download": True, "auto_install": True,
+                          "download_dir": str(dest)}, notices_nos.append, installed_nos.append)
+        check("no checksums -> no install (fail-safe)", len(installed_nos) == 0)
 
         # anti-loop: same version again -> no second install
         notices2, installed2 = [], []
         with patch.object(updates, "check_for_update", return_value="0.2.0"), \
-             patch.object(updates, "download_asset", return_value=dest / "RexCode-Setup-v0.2.0-x64.exe"):
+             patch.object(updates, "get_latest_release", return_value={**RELEASE_NEWER, "assets": [good_exe]}), \
+             patch.object(updates, "download_asset", return_value=dest / "RexCode-Setup-v0.2.0-x64.exe"), \
+             patch.object(updates, "download_checksums", return_value=tmp / "SHA256SUMS.txt"), \
+             patch.object(updates, "verify_checksum", return_value=True):
             maybe_update({**SETTINGS, "auto_download": True, "auto_install": True,
                           "download_dir": str(dest)}, notices2.append, installed2.append)
         check("no re-install for same version", len(installed2) == 0)
@@ -178,7 +206,10 @@ def main():
         cache_file.write_text("{}", encoding="utf-8")
         notices3, installed3 = [], []
         with patch.object(updates, "check_for_update", return_value="0.2.0"), \
-             patch.object(updates, "download_asset", return_value=dest / "RexCode-Setup-v0.2.0-x64.exe"):
+             patch.object(updates, "get_latest_release", return_value={**RELEASE_NEWER, "assets": [good_exe]}), \
+             patch.object(updates, "download_asset", return_value=dest / "RexCode-Setup-v0.2.0-x64.exe"), \
+             patch.object(updates, "download_checksums", return_value=tmp / "SHA256SUMS.txt"), \
+             patch.object(updates, "verify_checksum", return_value=True):
             maybe_update({**SETTINGS, "auto_download": True, "auto_install": False,
                           "download_dir": str(dest)}, notices3.append, installed3.append)
         check("auto_install=false -> no install", len(installed3) == 0)
