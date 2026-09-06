@@ -92,6 +92,7 @@ The TUI adds a **Ctrl+P command palette** and `/theme` (rex, mono, amber, cyan, 
 rex -p "explain this repo" --json          # one-shot, structured output
 rex -p "fix the failing test" --mode build # agent may write code
 rex -p "run checks" --mode build --yolo    # allow destructive actions unattended (default: DENY)
+rex --serve-webhook                        # start the GitHub webhook receiver (rex.webhost)
 ```
 
 Exit code 0 on success, 1 on provider failure. `--json` emits `{response, mode, provider, model, session, usage, elapsed_ms}`.
@@ -165,11 +166,33 @@ provider and OpenAI-compatible routers.
 
 ---
 
-## 🔔 Webhook / CI Review (engine ready)
+## 🔔 Webhook / CI Review
 
 `rex/webhooks.py` verifies GitHub HMAC signatures, filters PR/comment events, builds PR
-context, runs a review, and posts the 🦖 comment back — fully tested (22 checks). The
-HTTP host for it is on the [roadmap](#%EF%B8%8F-roadmap) alongside headless mode.
+context, runs a review, and posts the 🦖 comment back. `rex/webhost.py` exposes that engine
+over HTTP so GitHub can deliver webhooks straight to Rex Code (30 checks):
+
+```bash
+# 1. Set environment variables (token + webhook secret)
+set GITHUB_TOKEN=ghp_...
+set GITHUB_WEBHOOK_SECRET=s3cret
+
+# 2. Start the receiver (binds 127.0.0.1:8765 by default)
+rex --serve-webhook          # or: python -m rex.webhost
+python -m rex.webhost --host 0.0.0.0 --port 9000   # custom bind (use a TLS proxy)
+
+# 3. Point GitHub → Settings → Webhooks at your host
+#    Payload URL: http://your-host:8765/webhook/github
+#    Content type: application/json · Secret: same as GITHUB_WEBHOOK_SECRET
+#    Events: Pull requests, Issue comments
+```
+
+- `POST /webhook/github` — signature-verified delivery → `202 accepted` (review dispatched),
+  `200 ignored` (valid but nothing to do), `403 forbidden` (bad signature), `413` oversized.
+- `GET /healthz` — liveness probe for monitoring / reverse proxies.
+- Config: `config.json → webhook` (`enabled`, `host`, `port`, `secret_env`, `token_env`,
+  `events`, `trigger_word`, `auto_review`). `enabled: false` → the host refuses to start
+  (deny by default) and the default bind is loopback-only, so exposing it is a deliberate act.
 
 ---
 
@@ -178,6 +201,7 @@ HTTP host for it is on the [roadmap](#%EF%B8%8F-roadmap) alongside headless mode
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  Native TUI (rex/tui)        Classic CLI (cli.py)        │
+│       Webhook host (rex/webhost.py)                      │
 │            ↘                    ↙                         │
 │      RexAgent.run() — ReAct loop + StepEvent callbacks   │
 │            ↓                                              │
@@ -218,9 +242,9 @@ sensitive files · secrets redacted before persistence · cooperative abort betw
 python run_all_checks.py
 ```
 
-**12 mock-driven suites** — foundations, streaming, OpenAI-compatible wire formats,
+**28 mock-driven suites** — foundations, streaming, OpenAI-compatible wire formats,
 sessions + redaction, config schema, sandbox (Win+POSIX), git_publish scenarios, voice
-engines, plugins, webhooks (HMAC, PR flow), the update engine (versions, cache,
+engines, plugins, webhooks (HMAC, PR flow, HTTP host), the update engine (versions, cache,
 anti-loop, download safety), and the scheduler (cron semantics incl. weekday offset,
 row contract, history cap, minute dedup). A green run means it is safe to push.
 
@@ -263,10 +287,10 @@ row contract, history cap, minute dedup). A green run means it is safe to push.
 - [x] **`/ask` + `/imports`** — local code index: symbol search and import graph
 - [x] **'Open Rex Code here'** — Explorer right-click menu + project-scoped mode (REX_WORKSPACE)
 - [x] **Post-update changelog** — release notes shown once after updating
+- [x] **Webhook HTTP host** — `rex --serve-webhook` / `python -m rex.webhost`: stdlib `ThreadingHTTPServer` exposing the review engine at `POST /webhook/github` (+ `/healthz`), no new dependencies, deny-by-default
 
 **Next — must-haves for a serious native agent (prioritized)**
 
-- [ ] **Webhook HTTP host + FastAPI receiver** — wire `rex/webhooks.py` to an endpoint again
 - [ ] **winget/scoop distribution + code signing** — kill SmartScreen warnings for good
 
 ---

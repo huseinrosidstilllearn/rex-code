@@ -116,7 +116,9 @@ DEFAULT_CONFIG = {
         "events": ["pull_request", "issue_comment"],
         "trigger_word": "/rex",
         "auto_review": True,
-        "max_diff_chars": 30000
+        "max_diff_chars": 30000,
+        "host": "127.0.0.1",
+        "port": 8765
     },
     "updates": {
         "enabled": True,
@@ -334,6 +336,12 @@ def normalize_config(cfg: dict) -> dict:
         webhook["max_diff_chars"] = max(1000, int(webhook.get("max_diff_chars", 30000)))
     except (TypeError, ValueError):
         webhook["max_diff_chars"] = webhook_defaults["max_diff_chars"]
+    # HTTP host (rex.webhost) — bind address / port for the webhook receiver
+    webhook["host"] = str(webhook.get("host") or webhook_defaults.get("host") or "127.0.0.1")
+    try:
+        webhook["port"] = int(webhook.get("port") or webhook_defaults.get("port") or 8765)
+    except (TypeError, ValueError):
+        webhook["port"] = 8765
     cfg["webhook"] = webhook
 
     scheduler_defaults = DEFAULT_CONFIG["scheduler"]

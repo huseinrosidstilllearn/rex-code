@@ -119,6 +119,36 @@ Dilakukan **sekali** saat pertama kali, lalu tiap kali mau merilis versi baru.
 > atau Azure Trusted Signing. Untuk tahap prototype, praktik "More info →
 > Run anyway" adalah hal yang umum untuk aplikasi open-source.
 
+### D.3. Review PR otomatis via webhook (opsional)
+
+Rex bisa mem-review Pull Request secara otomatis — komentar 🦖 muncul di PR
+begitu dibuka, atau saat seseorang menulis komentar berisi `/rex`:
+
+1. **Set dua environment variable** di mesin tempat Rex berjalan:
+   ```
+   GITHUB_TOKEN=ghp_...          (token dengan akses repo)
+   GITHUB_WEBHOOK_SECRET=rahasia (string bebas, dibuat sendiri)
+   ```
+2. **Jalankan receiver**:
+   ```
+   rex --serve-webhook
+   ```
+   Default mendengarkan di `http://127.0.0.1:8765` (hanya komputer sendiri).
+   Untuk bisa dihubungi GitHub, jalankan di server/VM dan sesuaikan
+   `config.json → webhook` (`host`, `port`) atau pakai argumen
+   `--host 0.0.0.0 --port 9000` (letakkan di belakang reverse proxy HTTPS).
+3. **Daftarkan webhook di GitHub** — repo → *Settings → Webhooks → Add webhook*:
+   - Payload URL: `http://server-anda:8765/webhook/github`
+   - Content type: `application/json`
+   - Secret: sama dengan `GITHUB_WEBHOOK_SECRET`
+   - Events: *Pull requests* + *Issue comments*
+4. **Uji**: buka PR → beberapa detik kemudian komentar review dari Rex muncul.
+
+Cek kesehatan receiver: `GET /healthz` (mis. `curl http://127.0.0.1:8765/healthz`).
+Jawaban `202` berarti review dijadwalkan, `200` event valid tapi tidak perlu
+review, `403` signature salah. Matikan semua: set `webhook.enabled: false` di
+`config.json` — receiver menolak start (deny by default).
+
 ---
 
 ## Bagian E — Troubleshooting singkat

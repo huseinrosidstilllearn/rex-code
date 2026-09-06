@@ -19,6 +19,7 @@ from rex.webhooks import (
     is_event_allowed,
     verify_github_signature,
 )
+from rex.webhost import run_webhost, webhost_settings
 
 
 def check(name, condition):
@@ -141,7 +142,109 @@ def main():
     posted = post.call_args[0][3]
     check("failure posts error comment", "RuntimeError" in posted and "gh p_" not in posted.replace(" ", " "))
 
-    print("\nWebhook checks 22/22 PASS")
+    # 8. HTTP host (rex.webhost) — routing over real HTTP, engine stubbed.
+    import threading as _threading
+    from http.server import ThreadingHTTPServer
+
+    def make_payload_bytes():
+        return json.dumps(pr_payload()).encode()
+
+    # The engine reads config from disk; point it at our test settings for
+    # every request below (patch the symbol the handler looks up at runtime).
+    import socket as _socket
+    import rex.webhost as webhost_mod
+    import rex.webhooks as wh
+
+    def fake_engine(event, body, signature):
+        with patch.object(wh, "webhook_settings", return_value=SETTINGS), \
+             patch.dict(os.environ, {"GITHUB_WEBHOOK_SECRET": "s3cret", "GITHUB_TOKEN": "ghp_x"}), \
+             patch.object(wh.threading, "Thread"):
+            return handle_github_event(event, body, signature)
+
+    engine_patch = patch.object(webhost_mod, "handle_github_event", side_effect=fake_engine)
+    engine_patch.start()
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), webhost_mod.RexWebhookHandler)
+    port = server.server_address[1]
+    server_thread = _threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+
+    import httpx
+
+    base = f"http://127.0.0.1:{port}"
+
+    # healthz responds 200 with service identity
+    r = httpx.get(f"{base}/healthz", timeout=5)
+    check("healthz returns 200 ok", r.status_code == 200 and r.json()["status"] == "ok"
+          and r.json()["service"] == "rex-webhost")
+
+    # unknown GET path -> 404
+    r = httpx.get(f"{base}/nope", timeout=5)
+    check("unknown GET path 404", r.status_code == 404 and r.json()["status"] == "not_found")
+
+    # unknown POST path -> 404
+    r = httpx.post(f"{base}/other", content=b"{}", timeout=5)
+    check("unknown POST path 404", r.status_code == 404)
+
+    # invalid signature -> 403 forbidden
+    payload_bytes2 = make_payload_bytes()
+    r = httpx.post(f"{base}/webhook/github", content=payload_bytes2,
+                   headers={"X-GitHub-Event": "pull_request",
+                            "X-Hub-Signature-256": sign(payload_bytes2, "WRONG")}, timeout=5)
+    check("invalid signature 403", r.status_code == 403 and r.json()["status"] == "forbidden")
+
+    # valid delivery -> 202 accepted (engine thread mocked, never spawned)
+    payload_bytes2 = make_payload_bytes()
+    r = httpx.post(f"{base}/webhook/github", content=payload_bytes2,
+                   headers={"X-GitHub-Event": "pull_request",
+                            "X-Hub-Signature-256": sign(payload_bytes2, "s3cret")}, timeout=5)
+    check("valid delivery 202 accepted", r.status_code == 202 and r.json()["status"] == "accepted")
+
+    # event not in allowlist -> 200 ignored
+    payload_bytes2 = json.dumps({"action": "x", "repository": {}}).encode()
+    r = httpx.post(f"{base}/webhook/github", content=payload_bytes2,
+                   headers={"X-GitHub-Event": "deployment",
+                            "X-Hub-Signature-256": sign(payload_bytes2, "s3cret")}, timeout=5)
+    check("non-allowlisted event 200 ignored", r.status_code == 200 and r.json()["status"] == "ignored")
+
+    # no Content-Length body -> 400 (httpx always sets it; emulate raw socket)
+    import socket as _socket
+    s = _socket.create_connection(("127.0.0.1", port), timeout=5)
+    s.sendall(b"POST /webhook/github HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n")
+    chunks = []
+    while True:
+        data = s.recv(4096)
+        if not data:
+            break
+        chunks.append(data)
+    resp = b"".join(chunks).decode("utf-8", "replace")
+    s.close()
+    check("empty body 400 bad_request", " 400 " in resp and "bad_request" in resp)
+
+    # run_webhost refuses to start when webhook.enabled=false (deny by default)
+    with patch.object(webhost_mod, "normalize_config",
+                      return_value={"webhook": {**SETTINGS, "enabled": False}}), \
+         patch.object(webhost_mod, "create_server") as fake_create:
+        try:
+            run_webhost()
+            check("disabled webhook refuses to start", False)
+        except SystemExit as exc:
+            check("disabled webhook refuses to start", exc.code == 2 and not fake_create.called)
+        except _Exit:
+            check("disabled webhook refuses to start", False)
+
+    # webhost_settings applies host/port defaults safely
+    with patch.object(webhost_mod, "normalize_config",
+                      return_value={"webhook": {**SETTINGS, "host": None, "port": "garbage"}}):
+        ws = webhost_settings()
+    check("webhost defaults host/port", ws["host"] == "127.0.0.1" and ws["port"] == 8765)
+
+    engine_patch.stop()
+    server.shutdown()
+    server.server_close()
+    server_thread.join(timeout=5)
+
+    print("\nWebhook checks 30/30 PASS")
 
 
 if __name__ == "__main__":
