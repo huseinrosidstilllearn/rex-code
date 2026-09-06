@@ -362,6 +362,7 @@ A green run means it is safe to push.
 - [x] **`@` autocomplete + `@file:symbol`** — typing `@` in the TUI suggests files (Tab to complete/cycle); `@path/file.py:ClassName` inlines only that symbol's source span instead of the whole file (code-index powered)
 - [x] **`/compare` multi-model** — one prompt fanned out in parallel to the active provider + fallback chain (up to 3), answers rendered side-by-side with timing; a failing variant shows its error without affecting the others
 - [x] **`/export md|html`** — write the current session to a portable file: clean Markdown or standalone HTML (inline CSS, escaped content), tool turns fenced, usage + cost footer from the same `model_costs` convention; exports keep the session's secret redaction
+- [x] **Layered project rules** — `.rex/rules/*.md` in the project root applies everywhere; `.rex/rules/*.md` inside a subfolder applies when working there (labeled in the prompt); capped per file and total, toggleable via `context.rules`
 
 **Next — must-haves for a serious native agent (prioritized)**
 

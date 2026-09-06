@@ -145,6 +145,7 @@ DEFAULT_CONFIG = {
     "context": {
         "project_memory": True,
         "repo_map": True,
+        "rules": True,
         "max_context_tokens": 60000
     },
     "mcp": {
@@ -419,6 +420,7 @@ def normalize_config(cfg: dict) -> dict:
     context = {**context_defaults, **context}
     context["project_memory"] = bool(context.get("project_memory", True))
     context["repo_map"] = bool(context.get("repo_map", True))
+    context["rules"] = bool(context.get("rules", True))
     try:
         context["max_context_tokens"] = max(2000, int(context.get("max_context_tokens", 60000)))
     except (TypeError, ValueError):

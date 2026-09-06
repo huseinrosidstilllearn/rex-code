@@ -71,6 +71,50 @@ def main():
         finally:
             os.chdir(original_cwd)
 
+        # ── Layered project rules (.rex/rules/) ───────────────────────
+        rules_root = root / "rulesproj"
+        (rules_root / ".rex" / "rules").mkdir(parents=True)
+        (rules_root / "pkg").mkdir()
+        (rules_root / "pkg" / ".rex" / "rules").mkdir(parents=True)
+        (rules_root / ".rex" / "rules" / "zz-global.md").write_text("SELALU jalankan test dulu.", encoding="utf-8")
+        (rules_root / ".rex" / "rules" / "aa-style.md").write_text("Gunakan type hints.", encoding="utf-8")
+        (rules_root / "pkg" / ".rex" / "rules" / "pkg-only.md").write_text("API khusus pkg: tanpa print.", encoding="utf-8")
+        (rules_root / ".rex" / "rules" / "notes.txt").write_text("bukan markdown, diabaikan", encoding="utf-8")
+
+        pairs = ctx.collect_rules(rules_root)
+        check("rules root layer first", pairs[0][0] == "seluruh proyek" and pairs[0][1] == "Gunakan type hints.")
+        check("rules alphabetical in layer", pairs[1][1] == "SELALU jalankan test dulu.")
+        check("rules subfolder layer", any(scope == "folder pkg/" and "tanpa print" in text for scope, text in pairs))
+        check("rules ignore non-md", all("diabaikan" not in text for _, text in pairs))
+
+        capped = root / "caprules"
+        (capped / ".rex" / "rules").mkdir(parents=True)
+        for i in range(15):
+            (capped / ".rex" / "rules" / f"r{i:02d}.md").write_text(f"aturan {i}", encoding="utf-8")
+        check("rules file cap", len(ctx.collect_rules(capped)) == ctx.MAX_RULE_FILES)
+
+        big = root / "bigrules"
+        (big / ".rex" / "rules").mkdir(parents=True)
+        (big / ".rex" / "rules" / "huge.md").write_text("x" * 6000, encoding="utf-8")
+        pairs_big = ctx.collect_rules(big)
+        check("rules per-file cap", len(pairs_big[0][1]) <= ctx.MAX_RULE_FILE_CHARS + 30)
+
+        none_dir = root / "norules"
+        none_dir.mkdir()
+        check("no rules -> empty", ctx.collect_rules(none_dir) == [])
+
+        # Integration: rules appear in the prefix and honor the toggle
+        try:
+            import os
+            os.chdir(rules_root)
+            with patch_config({"context": {"project_memory": False, "repo_map": False, "rules": True, "max_context_tokens": 60000}}):
+                prefix = build_context_prefix("plan")
+                check("prefix includes rules", "Project Rules" in prefix and "jalankan test dulu" in prefix and "folder pkg/" in prefix)
+            with patch_config({"context": {"project_memory": False, "repo_map": False, "rules": False, "max_context_tokens": 60000}}):
+                check("rules toggle off", build_context_prefix("plan") == "")
+        finally:
+            os.chdir(original_cwd)
+
     print("\nContext checks PASS")
 
 

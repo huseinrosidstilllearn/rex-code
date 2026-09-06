@@ -6,6 +6,8 @@ Project context injected into the system prompt:
 - Project memory: ``REX.md`` in the working directory (+ optional global
   ``REX.md`` in the Rex data dir). The agent reads it every session, so
   users can state conventions, prohibitions, and test commands once.
+- Layered project rules: ``.rex/rules/*.md`` in the project root (applies
+  everywhere) and in immediate subfolders (applies when working there).
 - Repo map: deterministic project overview (structure, languages, key
   files) — the cheap, always-fresh alternative to indexing.
 
@@ -36,6 +38,12 @@ KEY_FILES = (
 MAX_MEMORY_CHARS = 4000
 MAX_MAP_CHARS = 2500
 MAX_TOP_ENTRIES = 40
+
+# Layered project rules (.rex/rules/*.md per folder)
+RULES_DIR_PARTS = (".rex", "rules")
+MAX_RULE_FILES = 12
+MAX_RULE_FILE_CHARS = 4000
+MAX_RULES_TOTAL_CHARS = 12_000
 
 
 def global_memory_path() -> Path:
@@ -162,6 +170,52 @@ def build_repo_map(project_root: Optional[Path] = None) -> str:
     return text
 
 
+def collect_rules(project_root: Optional[Path] = None) -> List[Tuple[str, str]]:
+    """
+    Layered project rules: ``<folder>/.rex/rules/*.md``.
+
+    Layer 1 = project root (applies everywhere); layer 2 = immediate
+    subfolders (apply when working inside that folder). Returns
+    ``[(scope_label, text)]`` top-down, alphabetical per folder. Markdown
+    files only, capped per file and in total. Never raises.
+    """
+    root = Path(project_root) if project_root else Path.cwd()
+    if not root.is_dir():
+        return []
+    result: List[Tuple[str, str]] = []
+
+    def _gather(rules_dir: Path, scope: str) -> None:
+        if len(result) >= MAX_RULE_FILES or not rules_dir.is_dir():
+            return
+        try:
+            files = sorted(rules_dir.glob("*.md"), key=lambda p: p.name.lower())
+        except OSError:
+            return
+        for path in files:
+            if len(result) >= MAX_RULE_FILES:
+                return
+            text = _read_capped(path, MAX_RULE_FILE_CHARS)
+            if text:
+                result.append((scope, text))
+
+    _gather(root.joinpath(*RULES_DIR_PARTS), "seluruh proyek")
+    total = sum(len(text) for _, text in result)
+    try:
+        children = sorted(
+            (d for d in root.iterdir() if d.is_dir() and d.name not in SKIP_DIRS),
+            key=lambda p: p.name.lower(),
+        )
+    except OSError:
+        children = []
+    for child in children:
+        if total >= MAX_RULES_TOTAL_CHARS or len(result) >= MAX_RULE_FILES:
+            break
+        before = len(result)
+        _gather(child.joinpath(*RULES_DIR_PARTS), f"folder {child.name}/")
+        total += sum(len(text) for _, text in result[before:])
+    return result
+
+
 def build_context_prefix(mode: str = "") -> str:
     """
     Build the extra context block appended to the system prompt.
@@ -189,6 +243,14 @@ def build_context_prefix(mode: str = "") -> str:
                 blocks.append(f"=== Project Instructions (REX.md) ===\n{project}")
             elif global_mem:
                 blocks.append(f"=== Global Instructions (REX.md global) ===\n{global_mem}")
+
+    if settings.get("rules", True):
+        rule_pairs = collect_rules()
+        if rule_pairs:
+            rendered = "\n\n".join(
+                f"[Berlaku: {scope}]\n{text}" for scope, text in rule_pairs
+            )
+            blocks.append(f"=== Project Rules (.rex/rules/) ===\n{rendered}")
 
     if settings.get("repo_map", True):
         repo_map = build_repo_map()
