@@ -558,6 +558,21 @@ class RexTUIApp(App):
                     chat.write(f"[green]REX.md created at {path}[/green]")
                 else:
                     chat.write(f"[yellow]REX.md already exists at {path} — untouched.[/yellow]")
+            elif cmd == "/diff":
+                from rex.review import format_session_diff
+                chat.write(format_session_diff())
+            elif cmd == "/doctor":
+                from rex.review import format_doctor
+                chat.write(format_doctor())
+            elif cmd == "/test":
+                from rex.review import run_tests_hook
+                result = run_tests_hook()
+                if not result.get("ran"):
+                    chat.write("[yellow]test_hook not set — fill config test_hook.command + enabled: true[/yellow]")
+                elif result.get("passed"):
+                    chat.write("[green]Tests passed ✔[/green]")
+                else:
+                    chat.write(f"[red]Tests failed ✘[/red]\n{result.get('output', '')[-2000:]}")
             elif cmd == "/checkpoints":
                 from rex.checkpoints import format_checkpoints_table
                 chat.write(format_checkpoints_table())

@@ -110,6 +110,9 @@ def show_help():
     table.add_row("/anti-slop", "Audit dan bersihkan teks dari buzzword & pola klise AI")
     table.add_row("/settings", "Ubah konfigurasi interaktif (mode, anti-slop, stream, voice, max-steps)")
     table.add_row("/cost", "Total token terpakai sesi ini (prompt/completion/total)")
+    table.add_row("/diff", "Review perubahan sesi per-file (shadow git)")
+    table.add_row("/doctor", "Cek kesehatan instalasi (API key, provider, updater)")
+    table.add_row("/test", "Jalankan test_hook proyek dan lihat hasilnya")
     table.add_row("/init", "Buat REX.md — instruksi proyek yang Rex baca tiap sesi")
     table.add_row("/checkpoints", "Riwayat checkpoint (snapshot otomatis tiap aksi BUILD)")
     table.add_row("/undo", "Kembalikan workspace ke checkpoint sebelumnya")
@@ -484,6 +487,28 @@ def main():
                 console.print(f"[green]REX.md dibuat di {path}[/green] — edit sesuai konvensi proyek Anda.")
             else:
                 console.print(f"[yellow]REX.md sudah ada di {path} — tidak diubah.[/yellow]")
+            continue
+        elif user_input == "/diff":
+            from rex.review import format_session_diff
+            console.print(format_session_diff())
+            continue
+        elif user_input == "/doctor":
+            from rex.review import format_doctor
+            console.print(format_doctor())
+            continue
+        elif user_input == "/test":
+            from rex.review import run_tests_hook, format_session_diff
+            result = run_tests_hook()
+            if not result.get("ran"):
+                console.print("[yellow]test_hook belum diset — isi config test_hook.command + enabled: true[/yellow]")
+            elif result.get("passed"):
+                console.print("[green]Test lulus ✔[/green]")
+                if result.get("output"):
+                    console.print(result["output"][-2000:])
+            else:
+                console.print("[red]Test gagal ✘ — hasil:[/red]")
+                console.print(result.get("output", "")[-2000:])
+                console.print("[dim]Saran: minta agen memperbaiki kegagalan ( kutip output di atas )[/dim]")
             continue
         elif user_input == "/checkpoints":
             from rex.checkpoints import format_checkpoints_table

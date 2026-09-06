@@ -72,6 +72,11 @@ DEFAULT_CONFIG = {
     "active_model": "gemini-flash-latest",
     "active_mode": "plan",
     "providers_fallback": [],
+    "test_hook": {
+        "enabled": False,
+        "command": "",
+        "timeout_sec": 120
+    },
     "anti_slop_enabled": True,
     "max_steps": 25,
     "terminal_timeout_sec": 45,
@@ -255,6 +260,19 @@ def normalize_config(cfg: dict) -> dict:
             seen.add(item)
             cleaned_fallback.append(item)
     cfg["providers_fallback"] = cleaned_fallback
+
+    hook_defaults = DEFAULT_CONFIG["test_hook"]
+    hook = cfg.get("test_hook")
+    if not isinstance(hook, dict):
+        hook = {}
+    hook = {**hook_defaults, **hook}
+    hook["enabled"] = bool(hook.get("enabled", False))
+    hook["command"] = str(hook.get("command") or "").strip()
+    try:
+        hook["timeout_sec"] = max(5, int(hook.get("timeout_sec", 120)))
+    except (TypeError, ValueError):
+        hook["timeout_sec"] = hook_defaults["timeout_sec"]
+    cfg["test_hook"] = hook
 
     voice_defaults = DEFAULT_CONFIG["voice"]
     voice = cfg.get("voice")

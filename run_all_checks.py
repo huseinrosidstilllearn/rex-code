@@ -28,6 +28,7 @@ CHECKS = [
     "test_mcp.py",
     "test_security.py",
     "test_failover.py",
+    "test_review.py",
 ]
 
 
