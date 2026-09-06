@@ -40,6 +40,7 @@ CHECKS = [
     "test_commands.py",
     "test_todos.py",
     "test_diffs.py",
+    "test_usage.py",
 ]
 
 

@@ -94,6 +94,8 @@ class StatusBar(Container):
             yield Label(" | ", classes="sep")
             yield Label("", id="model-label")
             yield Label(" | ", classes="sep")
+            yield Label("", id="usage-indicator")
+            yield Label(" | ", classes="sep")
             yield Label("", id="todo-indicator")
             yield Label(" | ", classes="sep")
             yield Label("", id="accent-indicator")
@@ -106,6 +108,14 @@ class StatusBar(Container):
                 indicator.update(f"[b cyan]todo {summary}[/b cyan] [dim]— /todos[/dim]")
             else:
                 indicator.update("")
+        except Exception:
+            pass  # status bar is cosmetic — never break a run on it
+
+    def update_usage(self, text: str) -> None:
+        """Show the session token/cost meter in the status bar."""
+        try:
+            indicator = self.query_one("#usage-indicator", Label)
+            indicator.update(f"[dim]{text}[/dim]" if text else "")
         except Exception:
             pass  # status bar is cosmetic — never break a run on it
 
@@ -582,12 +592,11 @@ class RexTUIApp(App):
                     except Exception as e:
                         chat.write(f"[red]Switch failed: {e}[/red]")
             elif cmd == "/cost":
-                usage = getattr(self.agent, "total_usage", None) or {} if self.agent else {}
-                chat.write(
-                    f"[dim]Session tokens — prompt: {usage.get('prompt_tokens', 0):,} · "
-                    f"completion: {usage.get('completion_tokens', 0):,} · "
-                    f"total: {usage.get('total_tokens', 0):,}[/dim]"
-                )
+                if self.agent:
+                    self.agent.usage.refresh_config()
+                    chat.write(f"[b]Session usage[/b] [dim]{self.agent.usage.format_summary()}[/dim]")
+                else:
+                    chat.write("[dim]No active agent — usage unavailable.[/dim]")
             elif cmd == "/init":
                 from rex.context_inject import create_rex_md
                 created, path = create_rex_md()
@@ -768,6 +777,12 @@ class RexTUIApp(App):
     def _on_done(self, result):
         chat = self.query_one("#chat", ChatArea)
         chat.add_done(result)
+        if self.agent:
+            try:
+                self.agent.usage.refresh_config()
+                self.query_one("#status", StatusBar).update_usage(self.agent.usage.format_footer())
+            except Exception:
+                pass  # footer meter is cosmetic
         self.query_one("#prompt-input", Input).focus()
 
     def _on_error(self, error):

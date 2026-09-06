@@ -335,6 +335,7 @@ A green run means it is safe to push.
 - [x] **Custom slash commands** — drop a Markdown file in `.rex/commands/`, get a new `/command` (`$ARGUMENTS` substitution, front-matter description, built-ins can never be shadowed)
 - [x] **Agent todo list** — `todo_write` tool + live progress in the status bar; board persisted per session (`.rex/todos/`), `/todos` to inspect
 - [x] **`apply_patch`** — unified-diff tool (multi-file, create/delete, fuzzy context matching like `patch(1)`); atomic: a mismatched hunk writes nothing
+- [x] **`/cost` + usage meter** — session token/cost accounting moved into `rex/usage.py`: per-model breakdown, `model_costs`-driven estimate, live `1.8k tok · ~$0.0021` status-bar footer, richer `/cost` summary
 
 **Next — must-haves for a serious native agent (prioritized)**
 

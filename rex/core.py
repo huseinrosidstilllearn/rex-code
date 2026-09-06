@@ -23,6 +23,7 @@ from rex.context_inject import build_context_prefix
 from rex.compaction import maybe_compact
 from rex.vision import extract_references, build_gemini_message
 from rex import todos as _todos
+from rex.usage import UsageMeter
 
 class StepEvent:
     def __init__(self, event_type: str, data: Any):
@@ -41,8 +42,8 @@ class RexAgent:
         self._provider_chain: Optional[List[tuple]] = None
         self._chain_index = 0
         self._abort = threading.Event()
-        # Cumulative token usage for this agent instance (all turns).
-        self.total_usage: Dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        # Cumulative token usage + cost estimate for this agent instance.
+        self.usage = UsageMeter()
 
     def abort(self):
         """Request cooperative cancellation before next tool or provider step."""
@@ -62,18 +63,14 @@ class RexAgent:
             self._remember({"role": "user", "content": user_input})
             self._user_persisted_this_run = True
 
+    @property
+    def total_usage(self) -> Dict[str, int]:
+        """Backward-compatible cumulative totals (see rex.usage.UsageMeter)."""
+        return self.usage.totals()
+
     def _accumulate_usage(self, usage) -> None:
-        """Add one response's usage into the cumulative totals (None-safe)."""
-        if usage is None:
-            return
-        prompt = getattr(usage, "prompt_tokens", None) or 0
-        completion = getattr(usage, "completion_tokens", None) or 0
-        total = getattr(usage, "total_tokens", None)
-        if total is None:
-            total = prompt + completion
-        self.total_usage["prompt_tokens"] += int(prompt)
-        self.total_usage["completion_tokens"] += int(completion)
-        self.total_usage["total_tokens"] += int(total)
+        """Add one response's usage into the meter (None-safe)."""
+        self.usage.accumulate(usage)
         # Persist into the session record for /stats (never raises).
         if self.session_id:
             session_store.add_usage(self.session_id, usage)
@@ -105,7 +102,7 @@ class RexAgent:
 
     def reset(self):
         self.messages = []
-        self.total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+        self.usage.reset()
         if isinstance(self.provider, GeminiProvider):
             self.provider.reset_session()
 
@@ -271,6 +268,7 @@ class RexAgent:
         cfg = load_config()
         self._abort.clear()
         self._user_persisted_this_run = False
+        self.usage.refresh_config()
         # Scope the agent todo board to this session for todo_write, and
         # surface every board update as a todo_update StepEvent (works for
         # both provider loops — the tools layer fires the write listener).
