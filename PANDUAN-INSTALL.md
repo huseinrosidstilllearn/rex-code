@@ -48,11 +48,43 @@ Mau mematikan sebagian? Edit `config.json` → bagian `"updates"`:
 
 ---
 
-## Bagian C — Untuk pemilik proyek (rilis versi baru)
+## Bagian C — SmartScreen & keamanan installer
+
+Saat pertama kali menjalankan installer, Windows mungkin menampilkan layar biru
+**"Windows protected your PC"** (SmartScreen). Ini **normal** — bukan berarti
+file-nya berbahaya. Peringatan ini muncul karena installer Rex Code belum
+ditandatangani dengan sertifikat kode berbayar (*code signing certificate*),
+yang biasanya hanya dimiliki aplikasi komersial besar.
+
+### Cara lanjut saat SmartScreen muncul
+
+1. Klik **More info** (Info selengkapnya).
+2. Klik **Run anyway** (Jalankan tetap).
+
+Setelah itu muncul permintaan izin administrator (UAC) — juga normal, karena
+installer menulis ke `C:\Program Files`.
+
+### Cara memastikan installer yang Anda unduh asli
+
+- Unduh **hanya** dari halaman resmi:
+  `https://github.com/huseinrosidstilllearn/rex-code/releases/latest`,
+  atau biarkan auto-update Rex yang mengunduh (dia hanya menerima URL resmi
+  GitHub Releases).
+- Nama file harus persis seperti `RexCode-Setup-v0.1.0-x64.exe` — waspada
+  terhadap file dengan nama mirip dari sumber lain.
+- Kalau tautan datang dari chat/email/social media, jangan dipakai — buka
+  langsung halaman Releases di atas.
+
+> Catatan: setelah suatu saat proyek memakai sertifikat kode, peringatan
+> SmartScreen ini hilang dengan sendirinya.
+
+---
+
+## Bagian D — Untuk pemilik proyek (rilis versi baru)
 
 Dilakukan **sekali** saat pertama kali, lalu tiap kali mau merilis versi baru.
 
-### C.1. Persiapan sekali saja
+### D.1. Persiapan sekali saja
 
 1. **Buat repo GitHub** bernama `rex-code` (public) di `github.com`.
 2. Di folder proyek ini, jalankan di terminal:
@@ -63,7 +95,7 @@ Dilakukan **sekali** saat pertama kali, lalu tiap kali mau merilis versi baru.
 3. **Buat API key Gemini** di `aistudio.google.com` dan isi `.env` (Bagian A langkah 3)
    supaya Rex bisa diuji di komputer sendiri.
 
-### C.2. Rilis versi baru (tiap kali, ~3 menit)
+### D.2. Rilis versi baru (tiap kali, ~3 menit)
 
 1. Naikkan versi di **satu tempat** saja — `rex/__init__.py`:
    ```python
@@ -82,13 +114,18 @@ Dilakukan **sekali** saat pertama kali, lalu tiap kali mau merilis versi baru.
 4. Selesai — semua pengguna mendapat update otomatis besok hari (atau saat
    dibuka berikutnya, maksimal 1× per hari).
 
+> Opsional: peringatan SmartScreen (Bagian C) hilang jika installer
+> ditandatangani sertifikat kode — mis. Certum/Sectigo (sekitar $100–400/tahun)
+> atau Azure Trusted Signing. Untuk tahap prototype, praktik "More info →
+> Run anyway" adalah hal yang umum untuk aplikasi open-source.
+
 ---
 
-## Bagian D — Troubleshooting singkat
+## Bagian E — Troubleshooting singkat
 
 | Masalah | Solusi |
 | --- | --- |
 | `Provider gagal diinisialisasi` | `.env` belum ada / `GEMINI_API_KEY` salah → Bagian A langkah 3. |
-| Windows SmartScreen menolak installer | Klik *More info* → *Run anyway* (normal untuk app tanpa sertifikat kode). |
+| Windows SmartScreen menolak installer | Normal — lihat **Bagian C**: klik *More info* → *Run anyway*. |
 | Update tidak muncul | Repo belum punya Releases, atau `enabled: false` di config. |
 | Mau unduh manual | Buka `https://github.com/huseinrosidstilllearn/rex-code/releases/latest`. |
