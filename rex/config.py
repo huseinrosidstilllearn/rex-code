@@ -71,6 +71,7 @@ DEFAULT_CONFIG = {
     "active_provider": "gemini",
     "active_model": "gemini-flash-latest",
     "active_mode": "plan",
+    "providers_fallback": [],
     "anti_slop_enabled": True,
     "max_steps": 25,
     "terminal_timeout_sec": 45,
@@ -243,6 +244,17 @@ def normalize_config(cfg: dict) -> dict:
 
     mode = str(cfg.get("active_mode", DEFAULT_CONFIG["active_mode"])).lower()
     cfg["active_mode"] = mode if mode in VALID_MODES else DEFAULT_CONFIG["active_mode"]
+
+    fallback = cfg.get("providers_fallback")
+    if not isinstance(fallback, list):
+        fallback = []
+    seen = set()
+    cleaned_fallback = []
+    for item in fallback:
+        if isinstance(item, str) and item.strip() and item not in seen:
+            seen.add(item)
+            cleaned_fallback.append(item)
+    cfg["providers_fallback"] = cleaned_fallback
 
     voice_defaults = DEFAULT_CONFIG["voice"]
     voice = cfg.get("voice")

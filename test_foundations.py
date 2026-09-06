@@ -64,7 +64,7 @@ def main():
         store = SessionStore(Path(temp_dir))
         session_id = store.create("custom", "mock")["id"]
         with patch("rex.core.session_store", store), \
-             patch("rex.core.get_llm_provider", return_value=ToolOnlyProvider()), \
+             patch("rex.core.get_llm_provider_with_fallback", return_value=(ToolOnlyProvider(), [None])), \
              patch("rex.core.load_config", return_value={
                  "stream_enabled": False, "anti_slop_enabled": False,
                  "max_steps": 1, "max_history_messages": 40,
@@ -78,7 +78,7 @@ def main():
         second_id = store.create("custom", "mock")["id"]
         holder = [None]
         with patch("rex.core.session_store", store), \
-             patch("rex.core.get_llm_provider", side_effect=lambda: AbortProvider(holder)), \
+             patch("rex.core.get_llm_provider_with_fallback", side_effect=lambda: (AbortProvider(holder), [None])), \
              patch("rex.core.load_config", return_value={
                  "stream_enabled": False, "anti_slop_enabled": False,
                  "max_steps": 3, "max_history_messages": 40,

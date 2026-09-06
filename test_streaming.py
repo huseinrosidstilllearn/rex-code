@@ -42,7 +42,7 @@ def main():
         session_id = store.create("custom", "mock")["id"]
         emitted = []
         with patch("rex.core.session_store", store), \
-             patch("rex.core.get_llm_provider", return_value=FakeRouter()), \
+             patch("rex.core.get_llm_provider_with_fallback", return_value=(FakeRouter(), [None])), \
              patch("rex.core.load_config", return_value={"stream_enabled": True, "anti_slop_enabled": False, "max_steps": 2}):
             from rex.core import RexAgent
             result = RexAgent(session_id).run("Mulai", on_step=lambda event: emitted.append(event))

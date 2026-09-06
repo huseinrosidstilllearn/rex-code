@@ -510,7 +510,40 @@ class RexTUIApp(App):
                 else:
                     chat.write(f"[dim]Available: {', '}.join(list_presets())]/dim")
             elif cmd == "/models":
-                chat.write("[dim]Edit config.json to switch providers/models.[/dim]")
+                rest_of_command = text[7:].strip()
+                try:
+                    cfg = normalize_config(load_config())
+                    providers = cfg.get("providers", {})
+                    if not providers:
+                        chat.write("[red]No providers configured.[/red]")
+                    else:
+                        for pid, pdata in providers.items():
+                            marker = " *" if pid == cfg.get("active_provider") else ""
+                            chat.write(f"[b]{pid}[/b]{marker} — {pdata.get('name', pid)} · model: {pdata.get('model', '?')}")
+                        chat.write("[dim]Switch: /models <provider_id> [model_name][/dim]")
+                except Exception as e:
+                    chat.write(f"[red]Failed to list providers: {e}[/red]")
+                rest = rest_of_command.strip()
+                if rest:
+                    parts = rest.split(None, 1)
+                    pid = parts[0]
+                    try:
+                        cfg = normalize_config(load_config())
+                        if pid not in cfg.get("providers", {}):
+                            chat.write(f"[red]Unknown provider: {pid}[/red]")
+                        else:
+                            pdata = cfg["providers"][pid]
+                            model = parts[1].strip() if len(parts) > 1 else pdata.get("model")
+                            if model not in pdata.get("available_models", [model]):
+                                chat.write(f"[red]Model '{model}' not in {pdata.get('available_models', [])}[/red]")
+                            else:
+                                cfg["active_provider"] = pid
+                                cfg["active_model"] = model
+                                cfg["providers"][pid]["model"] = model
+                                save_config(cfg)
+                                chat.write(f"[green]Switched to {pid} ({model}) — applies on next message.[/green]")
+                    except Exception as e:
+                        chat.write(f"[red]Switch failed: {e}[/red]")
             elif cmd == "/cost":
                 usage = getattr(self.agent, "total_usage", None) or {} if self.agent else {}
                 chat.write(

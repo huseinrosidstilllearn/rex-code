@@ -40,7 +40,7 @@ def main():
         assert store.list()[0]["id"] == session_id
 
         provider = FakeProvider()
-        with patch("rex.core.session_store", store), patch("rex.core.get_llm_provider", return_value=provider):
+        with patch("rex.core.session_store", store), patch("rex.core.get_llm_provider_with_fallback", return_value=(provider, [None])):
             from rex.core import RexAgent
             agent = RexAgent(session_id=session_id)
             agent.run("Lanjutkan")

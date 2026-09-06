@@ -27,6 +27,7 @@ CHECKS = [
     "test_compaction.py",
     "test_mcp.py",
     "test_security.py",
+    "test_failover.py",
 ]
 
 
