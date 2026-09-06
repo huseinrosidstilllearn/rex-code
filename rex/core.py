@@ -21,6 +21,7 @@ from rex.sessions import session_store
 from rex.logging_setup import log
 from rex.context_inject import build_context_prefix
 from rex.compaction import maybe_compact
+from rex.vision import extract_references, build_gemini_message
 
 class StepEvent:
     def __init__(self, event_type: str, data: Any):
@@ -133,10 +134,13 @@ class RexAgent:
                 role = "model" if message["role"] == "assistant" else "user"
                 history.append({"role": role, "parts": [{"text": str(message.get("content", ""))}]})
 
+        # Attach vision parts when @image references were present.
+        payload = build_gemini_message(user_input, getattr(self, "_attachments", []))
+
         if cfg.get("stream_enabled", True):
             final_response = ""
             for event in self.provider.chat_simple_stream(
-                message=user_input, system_prompt=system_prompt,
+                message=payload, system_prompt=system_prompt,
                 on_tool_callback=on_tool, history=history,
             ):
                 if self._abort.is_set():
@@ -149,7 +153,7 @@ class RexAgent:
                     self._accumulate_usage(getattr(event.data, "usage", None))
         else:
             final_llm_response = self.provider.chat_simple_with_usage(
-                message=user_input, system_prompt=system_prompt,
+                message=payload, system_prompt=system_prompt,
                 on_tool_callback=on_tool, history=history,
             )
             final_response = final_llm_response.content
@@ -266,6 +270,9 @@ class RexAgent:
         cfg = load_config()
         self._abort.clear()
         self._user_persisted_this_run = False
+        # Multimodal + @file injection (shared by CLI/TUI/headless).
+        clean_input, attachments, _vision_notes = extract_references(user_input)
+        self._attachments = attachments
         # Compaction first (LLM summary), then safe trim as backstop.
         try:
             compacted, did_compact = maybe_compact(self.messages)
@@ -289,9 +296,9 @@ class RexAgent:
             snapshot = list(self.messages)
             try:
                 if isinstance(self.provider, GeminiProvider):
-                    final_response = self._gemini_round(user_input, system_prompt, cfg, on_step)
+                    final_response = self._gemini_round(clean_input, system_prompt, cfg, on_step)
                 else:
-                    final_response = self._router_round(user_input, system_prompt, cfg, on_step)
+                    final_response = self._router_round(clean_input, system_prompt, cfg, on_step)
                 break
             except Exception as error:
                 # Discard the partial round (half-remembered tool messages),
