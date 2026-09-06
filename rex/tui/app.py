@@ -580,6 +580,13 @@ class RexTUIApp(App):
                         chat.write(f"[b]Proposed:[/b] {message}")
                         self._pending_commit = message
                         chat.write("[dim]Confirm: /commit yes — cancel: /commit no[/dim]")
+            elif cmd.startswith("/ask"):
+                from rex.codeindex import build_index, format_ask
+                question = text[4:].strip()
+                chat.write(format_ask(build_index(), question) if question else "[dim]Usage: /ask <query>[/dim]")
+            elif cmd == "/imports":
+                from rex.codeindex import build_index, format_import_graph
+                chat.write(format_import_graph(build_index()))
             elif cmd == "/pr":
                 from rex.autogit import generate_pr_description
                 chat.write("[dim]Menganalisis diff…[/dim]")

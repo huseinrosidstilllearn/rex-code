@@ -33,6 +33,7 @@ CHECKS = [
     "test_autogit.py",
     "test_vision.py",
     "test_ecosystem.py",
+    "test_codeindex.py",
 ]
 
 

@@ -116,6 +116,8 @@ def show_help():
     table.add_row("/stats", "Statistik token & estimasi biaya per sesi/hari (lokal)")
     table.add_row("/commit", "AI susun pesan commit dari diff, konfirmasi, lalu push")
     table.add_row("/pr", "AI susun deskripsi pull request dari diff")
+    table.add_row("/ask <query>", "Cari simbol/file/konten di indeks kode lokal")
+    table.add_row("/imports", "Lihat graf import antar-modul (repo map v2)")
     table.add_row("/init", "Buat REX.md — instruksi proyek yang Rex baca tiap sesi")
     table.add_row("/checkpoints", "Riwayat checkpoint (snapshot otomatis tiap aksi BUILD)")
     table.add_row("/undo", "Kembalikan workspace ke checkpoint sebelumnya")
@@ -504,6 +506,19 @@ def main():
                 console.print(result)
             else:
                 console.print("[dim]Dibatalkan — pesan tidak dipakai.[/dim]")
+            continue
+        elif user_input.startswith("/ask "):
+            from rex.codeindex import build_index, format_ask
+            question = user_input[5:].strip()
+            if question:
+                index = build_index()
+                console.print(format_ask(index, question))
+            else:
+                console.print("[dim]Pakai: /ask <nama simbol/file/topik>[/dim]")
+            continue
+        elif user_input == "/imports":
+            from rex.codeindex import build_index, format_import_graph
+            console.print(format_import_graph(build_index()))
             continue
         elif user_input == "/pr":
             from rex.autogit import generate_pr_description
