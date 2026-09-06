@@ -186,10 +186,11 @@ sensitive files · secrets redacted before persistence · cooperative abort betw
 python run_all_checks.py
 ```
 
-**11 mock-driven suites** — foundations, streaming, OpenAI-compatible wire formats,
+**12 mock-driven suites** — foundations, streaming, OpenAI-compatible wire formats,
 sessions + redaction, config schema, sandbox (Win+POSIX), git_publish scenarios, voice
-engines, plugins, webhooks (HMAC, PR flow), and the update engine (versions, cache,
-anti-loop, download safety). A green run means it is safe to push.
+engines, plugins, webhooks (HMAC, PR flow), the update engine (versions, cache,
+anti-loop, download safety), and the scheduler (cron semantics incl. weekday offset,
+row contract, history cap, minute dedup). A green run means it is safe to push.
 
 ---
 

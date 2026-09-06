@@ -54,6 +54,7 @@ def _cron_match(cron_expr: str, now: datetime) -> bool:
                         try:
                             start = int(start_s)
                             end = int(end_s)
+                            # inclusive range, stepped: start, start+step, ...
                             if start <= value <= end and (value - start) % step == 0:
                                 return True
                         except ValueError:
@@ -75,12 +76,19 @@ def _cron_match(cron_expr: str, now: datetime) -> bool:
                         continue
             return False
 
+        # Weekday: cron uses 0=Sunday; Python's weekday() is Monday=0.
+        # Convert so both ranges (1-5 = Mon-Fri in cron) and single values
+        # match the user's intent. 7 is accepted as an alias of Sunday.
+        cron_weekday = (now.weekday() + 1) % 7  # Monday=0 -> cron 1 ... Sunday=6 -> cron 0
         return (
             match_field(minute_s, now.minute, 59)
             and match_field(hour_s, now.hour, 23)
             and match_field(day_s, now.day, 31)
             and match_field(month_s, now.month, 12)
-            and match_field(weekday_s, now.weekday(), 6)  # Monday=0 in Python
+            and (
+                match_field(weekday_s, cron_weekday, 6)
+                or (cron_weekday == 0 and match_field(weekday_s, 7, 7))
+            )
         )
     except Exception:
         return False

@@ -338,28 +338,6 @@ def handle_scheduler():
             console.print(f"[red]Gagal trigger job: {exc}[/red]")
 
 
-        console.print(str(event.data), end="", markup=False, highlight=False)
-    elif event.event_type == "thought":
-        console.print(Panel(Markdown(event.data), title="Rex Berpikir", border_style="dim blue"))
-    elif event.event_type == "tool_call":
-        name = event.data.get("name")
-        args = event.data.get("args")
-        console.print(f"Tool: [cyan]{name}[/cyan]({args})", style=f"bold {BRAND_GREEN}")
-    elif event.event_type == "tool_result":
-        name = event.data.get("name")
-        res = str(event.data.get("result", ""))
-        snippet = res if len(res) < 300 else res[:300] + "... (dipotong)"
-        console.print(Panel(snippet, title=f"Hasil Tool: {name}", border_style=BRAND_GREEN))
-    elif event.event_type == "error":
-        err = str(event.data.get("error", ""))
-        console.print(Panel(err, title="Error", border_style="red"))
-    elif event.event_type == "mode_switch":
-        mode = event.data.get("mode", "?")
-        console.print(f"Beralih ke Mode {mode.upper()}", style="bold blue")
-    elif event.event_type == "done":
-        console.print("Selesai.", style=f"bold {BRAND_GREEN}")
-
-
 def check_updates_background():
     """Run the update check on a thread; returns (thread, notice_list)."""
     import threading
