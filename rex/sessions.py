@@ -87,7 +87,7 @@ class SessionStore:
                     with open(path, "r", encoding="utf-8") as file:
                         data = json.load(file)
                     sessions.append({key: data.get(key) for key in (
-                        "id", "title", "created_at", "updated_at", "provider", "model"
+                        "id", "title", "created_at", "updated_at", "provider", "model", "usage"
                     )})
                 except (OSError, json.JSONDecodeError):
                     continue
@@ -108,6 +108,28 @@ class SessionStore:
     def model_messages(self, session_id: str, limit: int = 40) -> List[Dict[str, Any]]:
         messages = self.load(session_id).get("messages", [])
         return messages[-max(1, int(limit)):]
+
+    def add_usage(self, session_id: str, usage: Any) -> Optional[Dict[str, int]]:
+        """Accumulate one response's token usage into the session record.
+        Returns the stored totals, or None on any failure. Never raises."""
+        try:
+            prompt = int(getattr(usage, "prompt_tokens", None) or 0)
+            completion = int(getattr(usage, "completion_tokens", None) or 0)
+            total = int(getattr(usage, "total_tokens", None) or (prompt + completion))
+            with self._lock:
+                data = self.load(session_id)
+                stored = data.get("usage")
+                if not isinstance(stored, dict):
+                    stored = {}
+                stored["prompt_tokens"] = int(stored.get("prompt_tokens", 0) or 0) + prompt
+                stored["completion_tokens"] = int(stored.get("completion_tokens", 0) or 0) + completion
+                stored["total_tokens"] = int(stored.get("total_tokens", 0) or 0) + total
+                data["usage"] = stored
+                data["updated_at"] = self._now()
+                self._write(data)
+                return dict(stored)
+        except Exception:
+            return None
 
     def delete(self, session_id: str) -> None:
         path = self._path(session_id)

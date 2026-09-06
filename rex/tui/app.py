@@ -558,6 +558,9 @@ class RexTUIApp(App):
                     chat.write(f"[green]REX.md created at {path}[/green]")
                 else:
                     chat.write(f"[yellow]REX.md already exists at {path} — untouched.[/yellow]")
+            elif cmd == "/stats":
+                from rex.stats import format_stats
+                chat.write(format_stats())
             elif cmd == "/diff":
                 from rex.review import format_session_diff
                 chat.write(format_session_diff())

@@ -29,6 +29,7 @@ CHECKS = [
     "test_security.py",
     "test_failover.py",
     "test_review.py",
+    "test_stats.py",
 ]
 
 

@@ -77,6 +77,7 @@ DEFAULT_CONFIG = {
         "command": "",
         "timeout_sec": 120
     },
+    "model_costs": {},
     "anti_slop_enabled": True,
     "max_steps": 25,
     "terminal_timeout_sec": 45,
@@ -273,6 +274,11 @@ def normalize_config(cfg: dict) -> dict:
     except (TypeError, ValueError):
         hook["timeout_sec"] = hook_defaults["timeout_sec"]
     cfg["test_hook"] = hook
+
+    model_costs = cfg.get("model_costs")
+    if not isinstance(model_costs, dict):
+        model_costs = {}
+    cfg["model_costs"] = model_costs
 
     voice_defaults = DEFAULT_CONFIG["voice"]
     voice = cfg.get("voice")

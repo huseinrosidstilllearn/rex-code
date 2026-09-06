@@ -113,6 +113,7 @@ def show_help():
     table.add_row("/diff", "Review perubahan sesi per-file (shadow git)")
     table.add_row("/doctor", "Cek kesehatan instalasi (API key, provider, updater)")
     table.add_row("/test", "Jalankan test_hook proyek dan lihat hasilnya")
+    table.add_row("/stats", "Statistik token & estimasi biaya per sesi/hari (lokal)")
     table.add_row("/init", "Buat REX.md — instruksi proyek yang Rex baca tiap sesi")
     table.add_row("/checkpoints", "Riwayat checkpoint (snapshot otomatis tiap aksi BUILD)")
     table.add_row("/undo", "Kembalikan workspace ke checkpoint sebelumnya")
@@ -487,6 +488,10 @@ def main():
                 console.print(f"[green]REX.md dibuat di {path}[/green] — edit sesuai konvensi proyek Anda.")
             else:
                 console.print(f"[yellow]REX.md sudah ada di {path} — tidak diubah.[/yellow]")
+            continue
+        elif user_input == "/stats":
+            from rex.stats import format_stats
+            console.print(format_stats())
             continue
         elif user_input == "/diff":
             from rex.review import format_session_diff

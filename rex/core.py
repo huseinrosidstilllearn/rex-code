@@ -72,6 +72,9 @@ class RexAgent:
         self.total_usage["prompt_tokens"] += int(prompt)
         self.total_usage["completion_tokens"] += int(completion)
         self.total_usage["total_tokens"] += int(total)
+        # Persist into the session record for /stats (never raises).
+        if self.session_id:
+            session_store.add_usage(self.session_id, usage)
 
     def _advance_provider(self) -> bool:
         """Move to the next provider in the fallback chain. False = exhausted."""
