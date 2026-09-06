@@ -102,9 +102,27 @@ Native TUI: `python rex/tui/cli_entry.py` · Classic CLI: `python cli.py`
 | `/checkpoints` `/undo` `/redo` | Inspect & roll back automatic BUILD-action snapshots. |
 | `/files` | List workspace files. |
 | `/sessions` `/new` `/use <id>` `/delete <id>` | Session management. |
+| `/<custom>` | Any `.rex/commands/*.md` file you drop in — see below. |
 | `/help` `/exit` | You guessed it. |
 
 The TUI adds a **Ctrl+P command palette** and `/theme` (rex, mono, amber, cyan, violet, rose, custom `#RRGGBB`).
+
+### Custom slash commands (`.rex/commands/`)
+
+Any Markdown file in `<workspace>/.rex/commands/` becomes a slash command — the filename is the command:
+
+```markdown
+<!-- .rex/commands/review.md -->
+---
+description: Ulas kode dengan fokus keamanan
+---
+Anda adalah reviewer. Audit kode berikut: $ARGUMENTS
+```
+
+- `/review src/app.py` sends the body with `$ARGUMENTS` replaced by `src/app.py` (arguments are appended when the placeholder is absent).
+- Front-matter `description:` shows in `/help` and the command palette.
+- Names are lowercase `[a-z0-9_-]`, max 32 chars; files colliding with built-in commands are ignored (built-ins always win).
+- The body runs as a normal user prompt — every tool call still goes through mode checks, approval, and checkpoints, so custom commands never add privileges.
 
 ### Headless / CI mode
 
@@ -312,6 +330,7 @@ A green run means it is safe to push.
 - [x] **Post-update changelog** — release notes shown once after updating
 - [x] **Webhook HTTP host** — `rex --serve-webhook` / `python -m rex.webhost`: stdlib `ThreadingHTTPServer` exposing the review engine at `POST /webhook/github` (+ `/healthz`), no new dependencies, deny-by-default
 - [x] **winget/scoop manifests** — auto-generated per release (`packaging/`), CI attaches them to the release; PR to the public registries is the last manual step
+- [x] **Custom slash commands** — drop a Markdown file in `.rex/commands/`, get a new `/command` (`$ARGUMENTS` substitution, front-matter description, built-ins can never be shadowed)
 
 **Next — must-haves for a serious native agent (prioritized)**
 

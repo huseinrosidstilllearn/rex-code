@@ -19,6 +19,7 @@ from textual.message import Message
 
 from rex.config import load_config, get_active_mode, set_active_mode, get_active_provider_info
 from rex.approval import set_provider, reset_session_allows
+from rex.commands import load_commands, expand_prompt, parse_input, format_help
 from rex.core import RexAgent, StepEvent
 from rex.sessions import session_store
 from rex.subagents import get_subagent
@@ -273,6 +274,11 @@ class CommandPalette(Container):
             ("/help", "Show help"),
             ("/exit", "Exit Rex Code"),
         ]
+        try:
+            for slash, info in sorted(load_commands().items()):
+                actions.append((slash, info.get("description") or "Custom command"))
+        except Exception:
+            pass  # palette must never fail on a broken commands dir
         for cmd, desc in actions:
             lv.append(ListItem(Label(f"[b]{cmd}[/b] [dim]-- {desc}[/dim]")))
 
@@ -364,6 +370,7 @@ class RexTUIApp(App):
         self.agent = None
         self.session_id = None
         self._running = False
+        self._custom_commands = {}  # loaded lazily per message (cheap dir scan)
         set_provider(self._approval_provider)
 
     def _approval_provider(self, action: str, summary: str):
@@ -483,6 +490,7 @@ class RexTUIApp(App):
 
         if text.startswith("/"):
             cmd = text.split()[0].lower()
+            arguments = text.split(None, 1)[1] if len(text.split(None, 1)) > 1 else ""
             if cmd == "/plan":
                 set_active_mode("plan")
                 self.query_one("#status", StatusBar).mode = "PLAN"
@@ -648,8 +656,19 @@ class RexTUIApp(App):
             elif cmd in ("/exit", "/quit"):
                 self.exit()
             else:
-                chat.write(f"[red]Unknown command: {cmd}[/red]")
-                chat.write("[dim]Type /help for available commands[/dim]")
+                custom = self._custom_commands.get(cmd)
+                if custom is None:
+                    # Not cached: rescan (covers newly added command files).
+                    self._custom_commands = load_commands()
+                    custom = self._custom_commands.get(cmd)
+                if custom is not None:
+                    prompt = expand_prompt(custom, arguments)
+                    chat.write(f"[dim]Custom command {cmd} — running…[/dim]")
+                    chat.add_user_message(prompt)
+                    self.run_agent(prompt)
+                else:
+                    chat.write(f"[red]Unknown command: {cmd}[/red]")
+                    chat.write("[dim]Type /help for available commands[/dim]")
             return
 
         chat.add_user_message(text)
@@ -676,6 +695,8 @@ class RexTUIApp(App):
         chat.write("  delegate_to_trike   -- Security audit")
         chat.write("  delegate_to_ptero   -- Architecture")
         chat.write("  delegate_to_dilo    -- Quality check")
+        for line in format_help(load_commands()):
+            chat.write(line)
         chat.write("[dim]Press Ctrl+P for quick command palette[/dim]")
 
 
