@@ -14,6 +14,7 @@ from rex.config import WORKSPACE_DIR, WORKFLOWS_DIR, get_active_mode, load_confi
 from rex.approval import request_approval, summarize_action
 from rex import checkpoints as _checkpoints
 from rex import todos as _todos
+from rex import diffs as _diffs
 
 def _checkpoint_before(action: str, summary: str) -> None:
     """Snapshot workspace before a destructive action. Never blocks."""
@@ -475,6 +476,82 @@ def delegate_to_dilo(task: str, context: str = "") -> str:
     return agent.run(task, context)
 
 
+def apply_patch(patch: str) -> str:
+    """
+    Terapkan unified diff ke file workspace (Hanya aktif di Mode Build).
+
+    Format: unified diff standar (git diff / diff -u) — header ---/+++,
+    hunks @@ ... @@, baris konteks ' ', tambahan '+', hapus '-'. Satu patch
+    boleh memuat banyak file. Penerapannya fuzzy (context match dengan
+    window terbatas) seperti patch(1); hunk yang tidak cocok membatalkan
+    seluruh patch TANPA menulis apa pun.
+    """
+    mode = get_active_mode()
+    if mode == "plan":
+        return "TIDAK DIIZINKAN: apply_patch hanya aktif di Mode Build."
+
+    try:
+        entries = _diffs.parse_diff(patch)
+    except _diffs.DiffError as e:
+        return f"Error patch: {e}"
+
+    summary_bits = []
+    for entry in entries:
+        old, new = _diffs._normalized_file_paths(entry)
+        target_name = new or old
+        action = "delete" if _diffs.deleted_file(entry) else ("create" if _diffs.created_file(entry) else "edit")
+        summary_bits.append(f"{action} {target_name} ({len(entry['hunks'])} hunk)")
+    summary = "; ".join(summary_bits)
+
+    if not request_approval("edit_file", f"apply_patch: {summary}"):
+        return "DITOLAK PENGGUNA: patch tidak disetujui. Jangan coba lagi tanpa instruksi baru."
+
+    # Compute every file's new content FIRST; only write when all hunks match.
+    planned: List[tuple] = []
+    for entry in entries:
+        old, new = _diffs._normalized_file_paths(entry)
+        if _diffs.deleted_file(entry):
+            target = _target(old)
+            if _is_sensitive(target) or not target or not target.exists():
+                return f"DIBLOKIR KEAMANAN: tidak bisa menghapus '{old}'."
+            planned.append((target, "delete", None))
+        elif _diffs.created_file(entry):
+            target = _target(new)
+            if _is_sensitive(target) or not target:
+                return f"DIBLOKIR KEAMANAN: path '{new}' tidak diizinkan."
+            planned.append((target, "create", _diffs.build_new_file(entry["hunks"])))
+        else:
+            target = _target(new or old)
+            if _is_sensitive(target) or not target or not target.exists():
+                return f"Error: file '{new or old}' tidak ditemukan / tidak diizinkan."
+            try:
+                with open(target, "r", encoding="utf-8") as f:
+                    current = f.read()
+                updated = _diffs.apply_to_text(current, entry["hunks"])
+            except _diffs.DiffError as e:
+                return f"Error patch pada '{new or old}': {e} — tidak ada file yang diubah."
+            except OSError as e:
+                return f"Error saat membaca '{new or old}': {e}"
+            planned.append((target, "edit", updated))
+
+    # All hunks validated — snapshot once, then write everything.
+    _checkpoint_before("apply_patch", f"apply_patch: {summary}")
+    applied = []
+    for target, action, content in planned:
+        try:
+            if action == "delete":
+                target.unlink()
+                applied.append(f"hapus {target.name}")
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with open(target, "w", encoding="utf-8") as f:
+                    f.write(content)
+                applied.append(f"{action} {target.name}")
+        except OSError as e:
+            return f"Berhenti di tengah: {applied} — gagal menulis {target.name}: {e}"
+    return "Patch diterapkan: " + ", ".join(applied)
+
+
 def todo_write(todos: list) -> str:
     """
     Ganti isi todo list sesi (agent task board).
@@ -658,6 +735,19 @@ TOOL_DEFINITIONS = [
         }
     },
     {
+        "name": "apply_patch",
+        "description": ("Terapkan unified diff (git diff / diff -u) ke file workspace. "
+                        "Lebih presisi daripada edit_file untuk perubahan multi-baris/multi-file. "
+                        "Hanya aktif di Mode Build; hunk yang tidak cocok membatalkan seluruh patch."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "patch": {"type": "string", "description": "Unified diff lengkap (---/+++, @@ hunks, +/-/spasi)"}
+            },
+            "required": ["patch"]
+        }
+    },
+    {
         "name": "todo_write",
         "description": ("Perbarui todo list tugas sesi ini. Kirim SELURU daftar setiap kali "
                         "(bukan diff): [{content, status}] dengan status pending/in_progress/completed. "
@@ -700,4 +790,5 @@ TOOL_REGISTRY = {
     "delegate_to_ptero": delegate_to_ptero,
     "delegate_to_dilo": delegate_to_dilo,
     "todo_write": todo_write,
+    "apply_patch": apply_patch,
 }

@@ -39,6 +39,7 @@ CHECKS = [
     "test_assets.py",
     "test_commands.py",
     "test_todos.py",
+    "test_diffs.py",
 ]
 
 

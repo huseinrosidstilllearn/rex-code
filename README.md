@@ -159,7 +159,7 @@ Tools appear as `mcp_fetch_fetch` and merge into the tool registry like plugins.
 | Tool | Mode | Purpose |
 | --- | --- | --- |
 | `read_file` `list_dir` `search_files` `search_content` | PLAN & BUILD | Read and explore the workspace. |
-| `write_file` `edit_file` `delete_file` | BUILD only | Create and modify files. |
+| `write_file` `edit_file` `delete_file` `apply_patch` | BUILD only | Create and modify files — `apply_patch` takes a full unified diff (multi-file, create/delete) and aborts atomically on a mismatched hunk. |
 | `run_command` | BUILD only | Sandboxed shell (PowerShell / bash). |
 | `git_status` `git_publish` | BUILD for publish | Stage → secret-scan → commit → push. |
 | `todo_write` | PLAN & BUILD | Agent task board — plan steps and mark progress; shown live in the status bar. |
@@ -334,6 +334,7 @@ A green run means it is safe to push.
 - [x] **winget/scoop manifests** — auto-generated per release (`packaging/`), CI attaches them to the release; PR to the public registries is the last manual step
 - [x] **Custom slash commands** — drop a Markdown file in `.rex/commands/`, get a new `/command` (`$ARGUMENTS` substitution, front-matter description, built-ins can never be shadowed)
 - [x] **Agent todo list** — `todo_write` tool + live progress in the status bar; board persisted per session (`.rex/todos/`), `/todos` to inspect
+- [x] **`apply_patch`** — unified-diff tool (multi-file, create/delete, fuzzy context matching like `patch(1)`); atomic: a mismatched hunk writes nothing
 
 **Next — must-haves for a serious native agent (prioritized)**
 
