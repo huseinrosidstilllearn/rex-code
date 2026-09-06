@@ -49,7 +49,7 @@ BUILTIN_COMMANDS = {
     "/commit", "/ask", "/imports", "/pr", "/stats", "/diff", "/doctor",
     "/test", "/checkpoints", "/undo", "/redo", "/help", "/exit", "/quit",
     "/voice", "/n8n", "/scheduler", "/anti-slop", "/files", "/sessions",
-    "/new", "/use", "/delete",
+    "/new", "/use", "/delete", "/todos",
 }
 
 

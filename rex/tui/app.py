@@ -94,7 +94,20 @@ class StatusBar(Container):
             yield Label(" | ", classes="sep")
             yield Label("", id="model-label")
             yield Label(" | ", classes="sep")
+            yield Label("", id="todo-indicator")
+            yield Label(" | ", classes="sep")
             yield Label("", id="accent-indicator")
+
+    def update_todo(self, summary: str, todos: list) -> None:
+        """Show agent progress in the status bar (e.g. ``todo 2/5 selesai``)."""
+        try:
+            indicator = self.query_one("#todo-indicator", Label)
+            if todos:
+                indicator.update(f"[b cyan]todo {summary}[/b cyan] [dim]— /todos[/dim]")
+            else:
+                indicator.update("")
+        except Exception:
+            pass  # status bar is cosmetic — never break a run on it
 
     def watch_mode(self, value: str) -> None:
         badge = self.query_one("#mode-badge", Label)
@@ -637,6 +650,11 @@ class RexTUIApp(App):
             elif cmd == "/checkpoints":
                 from rex.checkpoints import format_checkpoints_table
                 chat.write(format_checkpoints_table())
+            elif cmd == "/todos":
+                from rex.todos import get as get_todos, format_board, summary
+                board = get_todos(self.session_id)
+                chat.write(f"[b]Agent todos[/b] [dim]{summary(board)}[/dim]")
+                chat.write(format_board(board))
             elif cmd == "/undo":
                 from rex.checkpoints import undo
                 result = undo()
@@ -683,6 +701,7 @@ class RexTUIApp(App):
         chat.write(f"  [b]/cost[/b]      Token usage for this session")
         chat.write(f"  [b]/init[/b]      Create REX.md project instructions")
         chat.write(f"  [b]/checkpoints[/b] List automatic snapshots")
+        chat.write(f"  [b]/todos[/b]     Show the agent todo board for this session")
         chat.write(f"  [b]/undo[/b]      Roll workspace back one checkpoint")
         chat.write(f"  [b]/redo[/b]      Re-apply the last undo")
         chat.write(f"  [b]/theme <n>[/b] Change theme: rex mono amber cyan violet rose custom")
@@ -735,6 +754,11 @@ class RexTUIApp(App):
             chat.add_tool_call(event.data.get("name", ""), event.data.get("args", {}))
         elif event.event_type == "tool_result":
             chat.add_tool_result(event.data.get("name", ""), str(event.data.get("result", "")))
+        elif event.event_type == "todo_update":
+            todos = event.data.get("todos", [])
+            summary = event.data.get("summary", "")
+            status = self.query_one("#status", StatusBar)
+            status.update_todo(summary, todos)
         elif event.event_type == "error":
             chat.add_error(str(event.data.get("error", "")))
         elif event.event_type == "mode_switch":

@@ -13,6 +13,7 @@ from typing import Dict, Any, List, Optional
 from rex.config import WORKSPACE_DIR, WORKFLOWS_DIR, get_active_mode, load_config
 from rex.approval import request_approval, summarize_action
 from rex import checkpoints as _checkpoints
+from rex import todos as _todos
 
 def _checkpoint_before(action: str, summary: str) -> None:
     """Snapshot workspace before a destructive action. Never blocks."""
@@ -474,6 +475,27 @@ def delegate_to_dilo(task: str, context: str = "") -> str:
     return agent.run(task, context)
 
 
+def todo_write(todos: list) -> str:
+    """
+    Ganti isi todo list sesi (agent task board).
+
+    Seluruh daftar dikirim setiap kali (bukan diff) — pola TodoWrite yang
+    lazim: model menulis ulang board lengkap dengan status terkini.
+    Aman di kedua mode (tidak menyentuh file proyek); hasil dikembalikan
+    sebagai konfirmasi teks untuk model. Board juga dipantau UI lewat
+    StepEvent ``todo_update`` dari rex.core.
+    """
+    raw_count = len(todos) if isinstance(todos, list) else 0
+    board = _todos.write(_todos.current_session(), todos)
+    if raw_count == 0:
+        return "Todo list dikosongkan."
+    note = "" if len(board) == raw_count else " (beberapa item tidak valid diabaikan)"
+    return (
+        f"Todo list diperbarui — {_todos.summary(board)}{note}:\n"
+        f"{_todos.format_board(board)}"
+    )
+
+
 # Schema definitions for LLM Tool Calling
 TOOL_DEFINITIONS = [
     {
@@ -634,6 +656,30 @@ TOOL_DEFINITIONS = [
             },
             "required": ["task"]
         }
+    },
+    {
+        "name": "todo_write",
+        "description": ("Perbarui todo list tugas sesi ini. Kirim SELURU daftar setiap kali "
+                        "(bukan diff): [{content, status}] dengan status pending/in_progress/completed. "
+                        "Gunakan untuk merencanakan langkah sebelum eksekusi dan menandai progres."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "todos": {
+                    "type": "array",
+                    "description": "Daftar lengkap todo terkini",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "content": {"type": "string", "description": "Uraian tugas (singkat)"},
+                            "status": {"type": "string", "enum": ["pending", "in_progress", "completed"], "description": "Status tugas"}
+                        },
+                        "required": ["content", "status"]
+                    }
+                }
+            },
+            "required": ["todos"]
+        }
     }
 ]
 
@@ -653,4 +699,5 @@ TOOL_REGISTRY = {
     "delegate_to_trike": delegate_to_trike,
     "delegate_to_ptero": delegate_to_ptero,
     "delegate_to_dilo": delegate_to_dilo,
+    "todo_write": todo_write,
 }

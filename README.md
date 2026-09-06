@@ -100,6 +100,7 @@ Native TUI: `python rex/tui/cli_entry.py` · Classic CLI: `python cli.py`
 | `/cost` | Token usage for this session (prompt / completion / total). |
 | `/init` | Create `REX.md` — project instructions Rex reads every session. |
 | `/checkpoints` `/undo` `/redo` | Inspect & roll back automatic BUILD-action snapshots. |
+| `/todos` | Show the agent todo board for this session. |
 | `/files` | List workspace files. |
 | `/sessions` `/new` `/use <id>` `/delete <id>` | Session management. |
 | `/<custom>` | Any `.rex/commands/*.md` file you drop in — see below. |
@@ -161,6 +162,7 @@ Tools appear as `mcp_fetch_fetch` and merge into the tool registry like plugins.
 | `write_file` `edit_file` `delete_file` | BUILD only | Create and modify files. |
 | `run_command` | BUILD only | Sandboxed shell (PowerShell / bash). |
 | `git_status` `git_publish` | BUILD for publish | Stage → secret-scan → commit → push. |
+| `todo_write` | PLAN & BUILD | Agent task board — plan steps and mark progress; shown live in the status bar. |
 | `delegate_to_brachio` / `raptor` / `trike` / `ptero` / `dilo` | PLAN only | Sub-agent specialists (read-only). |
 
 Plugins extend this list automatically — see [`plugins/current_time.py`](plugins/current_time.py) as the template.
@@ -331,6 +333,7 @@ A green run means it is safe to push.
 - [x] **Webhook HTTP host** — `rex --serve-webhook` / `python -m rex.webhost`: stdlib `ThreadingHTTPServer` exposing the review engine at `POST /webhook/github` (+ `/healthz`), no new dependencies, deny-by-default
 - [x] **winget/scoop manifests** — auto-generated per release (`packaging/`), CI attaches them to the release; PR to the public registries is the last manual step
 - [x] **Custom slash commands** — drop a Markdown file in `.rex/commands/`, get a new `/command` (`$ARGUMENTS` substitution, front-matter description, built-ins can never be shadowed)
+- [x] **Agent todo list** — `todo_write` tool + live progress in the status bar; board persisted per session (`.rex/todos/`), `/todos` to inspect
 
 **Next — must-haves for a serious native agent (prioritized)**
 

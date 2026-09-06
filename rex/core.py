@@ -22,6 +22,7 @@ from rex.logging_setup import log
 from rex.context_inject import build_context_prefix
 from rex.compaction import maybe_compact
 from rex.vision import extract_references, build_gemini_message
+from rex import todos as _todos
 
 class StepEvent:
     def __init__(self, event_type: str, data: Any):
@@ -270,6 +271,18 @@ class RexAgent:
         cfg = load_config()
         self._abort.clear()
         self._user_persisted_this_run = False
+        # Scope the agent todo board to this session for todo_write, and
+        # surface every board update as a todo_update StepEvent (works for
+        # both provider loops — the tools layer fires the write listener).
+        _todos.set_current_session(self.session_id)
+        if on_step:
+            _todos.set_write_listener(
+                lambda sid, board: on_step(StepEvent("todo_update", {
+                    "todos": board,
+                    "summary": _todos.summary(board),
+                    "session": sid or self.session_id,
+                }))
+            )
         # Multimodal + @file injection (shared by CLI/TUI/headless).
         clean_input, attachments, _vision_notes = extract_references(user_input)
         self._attachments = attachments
@@ -312,6 +325,7 @@ class RexAgent:
         if on_step:
             on_step(StepEvent("done", final_response))
 
+        _todos.set_current_session(None)  # run() over: clear the board scope
         self._trim_history(cfg.get("max_history_messages", 40))
 
         return final_response

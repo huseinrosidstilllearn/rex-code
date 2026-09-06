@@ -38,6 +38,7 @@ CHECKS = [
     "test_packaging.py",
     "test_assets.py",
     "test_commands.py",
+    "test_todos.py",
 ]
 
 
