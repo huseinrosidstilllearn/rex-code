@@ -277,4 +277,9 @@ def effective_tool_registry() -> Dict[str, Callable]:
             )
     except Exception:
         pass  # MCP must never break tool execution
+    try:
+        from rex.hooks import apply_hooks
+        registry = apply_hooks(registry)
+    except Exception:
+        pass  # hooks must never break tool execution
     return registry

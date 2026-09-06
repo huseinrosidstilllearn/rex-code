@@ -152,6 +152,21 @@ Both can be toggled in `config.json → context`. Long sessions are auto-compact
 
 Tools appear as `mcp_fetch_fetch` and merge into the tool registry like plugins. A broken server is skipped, never fatal.
 
+### Hooks — Pre/PostToolUse
+
+Drop a `.rex/hooks.json` in your project to run your own commands around every tool call:
+
+```json
+{
+  "hooks": {
+    "PreToolUse":  [{ "matcher": "run_command|delete_file", "command": "python guard.py", "timeout_sec": 10 }],
+    "PostToolUse": [{ "matcher": "edit_file|apply_patch",   "command": "black ." }]
+  }
+}
+```
+
+Each hook receives `{"tool", "args"}` (before) or `{"tool", "args", "result"}` (after) as JSON on **stdin**. A `PreToolUse` hook that exits with code **2 denies the tool call** — its stdout becomes the reason the model sees; any other exit code, a crash, or a timeout never blocks (logged, fail-open). `PostToolUse` stdout is appended to the tool result as feedback (e.g. "auto-formatted"). Hooks run in the same sandbox as `run_command` (workspace cwd, secret-sanitized env, hard timeout), capped at 16 per event.
+
 ---
 
 ## 🧰 Agent Tools
@@ -337,6 +352,7 @@ A green run means it is safe to push.
 - [x] **`apply_patch`** — unified-diff tool (multi-file, create/delete, fuzzy context matching like `patch(1)`); atomic: a mismatched hunk writes nothing
 - [x] **`/cost` + usage meter** — session token/cost accounting moved into `rex/usage.py`: per-model breakdown, `model_costs`-driven estimate, live `1.8k tok · ~$0.0021` status-bar footer, richer `/cost` summary
 - [x] **Token budget guard** — set `token_budget` (total tokens per session, 0 = off): yellow warning at 80%, hard stop at 100% — the next run is refused before any provider call until the budget is raised
+- [x] **Pre/PostToolUse hooks** — `.rex/hooks.json` runs your commands around every tool call: exit 2 on `PreToolUse` denies the call (stdout = reason), `PostToolUse` stdout is fed back to the model; sandboxed, fail-open, covers built-in + plugin + MCP tools
 
 **Next — must-haves for a serious native agent (prioritized)**
 

@@ -41,6 +41,7 @@ CHECKS = [
     "test_todos.py",
     "test_diffs.py",
     "test_usage.py",
+    "test_hooks.py",
 ]
 
 
