@@ -90,6 +90,17 @@ jobs:
       - name: Smoke test frozen binary
         run: ${{ matrix.exe }} --version
 
+      # Linux zip: stage the desktop-integration files next to the binary so
+      # `sh assets/linux/setup.sh` works straight after extraction.
+      - name: Stage Linux desktop integration files
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          mkdir -p dist/RexCode/assets/linux
+          cp assets/rexcode.desktop dist/RexCode/assets/
+          cp assets/linux/setup.sh dist/RexCode/assets/linux/
+          cp -r assets/linux/icons dist/RexCode/assets/linux/
+
       - name: Package artifact
         shell: bash
         run: |

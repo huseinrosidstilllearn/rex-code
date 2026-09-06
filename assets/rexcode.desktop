@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Rex Code
+GenericName=AI Coding Agent
+Comment=Autonomous AI coding agent — plan first, build on approval
+Exec=__REX_BIN__
+Icon=rexcode
+Terminal=true
+Categories=Development;IDE;Utility;
+Keywords=ai;agent;coding;terminal;llm;

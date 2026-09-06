@@ -12,6 +12,7 @@
 # regardless of the working directory. No cwd hacks.
 
 import os
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files
@@ -91,6 +92,13 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
+# Icon: only Windows embeds an icon resource into the exe (PyInstaller EXE
+# writes it via the win32 resource section). Bare Linux/macOS binaries carry
+# no embedded icon — Linux gets hicolor PNGs + a .desktop entry via
+# assets/linux/setup.sh (staged into the zip by release.yml), and macOS uses
+# assets/icon.icns once a .app bundle (PyInstaller BUNDLE) is added.
+ICON = str(PROJECT_ROOT / "assets" / "icon.ico") if sys.platform == "win32" else None
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -107,7 +115,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(PROJECT_ROOT / "assets" / "icon.ico"),
+    icon=ICON,
 )
 
 coll = COLLECT(

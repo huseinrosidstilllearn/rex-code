@@ -29,6 +29,16 @@ with a sandboxed tool layer, sub-agent specialists, and one-click installer.
 
 All user data lives in `%LOCALAPPDATA%\RexCode\` (config, sessions, logs, downloads) — never inside the install folder. Updates are checked once a day and installed automatically; every step can be switched off in `config.json → updates`.
 
+### Linux / macOS
+
+```bash
+# Download rex-linux-x64.zip from Releases, then:
+unzip rex-linux-x64.zip && cd RexCode
+sh assets/linux/setup.sh     # app-menu entry + hicolor icons + 'rex' on PATH
+```
+
+`sh assets/linux/setup.sh --uninstall` removes it — user data in `~/.local/share/RexCode` is always kept. macOS: extract `rex-macos-arm64.zip` and run `./rex` (a Terminal window just opens).
+
 ---
 
 ## ✨ What Rex Code Can Do
@@ -252,12 +262,14 @@ sensitive files · secrets redacted before persistence · cooperative abort betw
 python run_all_checks.py
 ```
 
-**29 mock-driven suites** — foundations, streaming, OpenAI-compatible wire formats,
+**30 mock-driven suites** — foundations, streaming, OpenAI-compatible wire formats,
 sessions + redaction, config schema, sandbox (Win+POSIX), git_publish scenarios, voice
 engines, plugins, webhooks (HMAC, PR flow, HTTP host), the update engine (versions, cache,
 anti-loop, download safety), the scheduler (cron semantics incl. weekday offset,
-row contract, history cap, minute dedup), and the distribution manifests
-(winget/scoop render integrity vs `rex/__init__.py` + `rexcode.iss`). A green run means it is safe to push.
+row contract, history cap, minute dedup), the distribution manifests
+(winget/scoop render integrity vs `rex/__init__.py` + `rexcode.iss`), and brand-asset
+integrity (icon formats, installer wizard art, Linux desktop files vs the asset pack).
+A green run means it is safe to push.
 
 ---
 

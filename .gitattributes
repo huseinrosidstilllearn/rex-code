@@ -1,0 +1,9 @@
+# Asset scripts must stay LF on every platform (CI runs them on Linux)
+*.sh text eol=lf
+*.desktop text eol=lf
+
+# Binary brand assets — never normalize, never diff as text
+*.png binary
+*.ico binary
+*.icns binary
+*.bmp binary

@@ -27,6 +27,9 @@ DisableProgramGroupPage=yes
 OutputDir=..\..\dist\installer
 OutputBaseFilename=RexCode-Setup-v{#AppVersion}-x64
 SetupIconFile=..\..\assets\icon.ico
+; Wizard branding (164x314 + 55x55, classic aspect ratio; Inno scales per DPI)
+WizardImageFile=..\..\assets\installer\wizard.bmp
+WizardSmallImageFile=..\..\assets\installer\wizard-small.bmp
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
