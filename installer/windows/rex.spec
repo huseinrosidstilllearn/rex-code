@@ -23,7 +23,6 @@ hiddenimports = [
     # LLM providers
     "google.genai",
     "google.genai.types",
-    "google.ai.generativelanguage",
     "openai",
     # TUI
     "textual",
@@ -40,7 +39,6 @@ hiddenimports = [
     # Config / validation
     "pydantic",
     "pydantic_core",
-    "pydantic_settings",
     "dotenv",
     # Timezones (Windows has no system tz database)
     "tzdata",
