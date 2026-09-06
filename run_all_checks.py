@@ -43,6 +43,7 @@ CHECKS = [
     "test_usage.py",
     "test_hooks.py",
     "test_status.py",
+    "test_websearch.py",
 ]
 
 

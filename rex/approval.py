@@ -156,6 +156,10 @@ def summarize_action(action: str, args: dict) -> str:
         return f"jalankan perintah: {command[:120]}"
     if action == "git_publish":
         return f"commit & push: {str(args.get('message', ''))[:80]}"
+    if action == "web_fetch":
+        return f"fetch halaman web: {str(args.get('url', '?'))[:120]}"
+    if action == "web_search":
+        return f"cari di web: {str(args.get('query', '?'))[:120]}"
     if action == "mcp_tool":
         return (f"eksekusi tool MCP '{args.get('tool', '?')}' (server: {args.get('server', '?')}): "
                 f"{str(args.get('args', ''))[:120]}")

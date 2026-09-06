@@ -87,6 +87,12 @@ DEFAULT_CONFIG = {
     },
     "model_costs": {},
     "token_budget": 0,
+    "web": {
+        "enabled": True,
+        "allowed_domains": [],
+        "timeout_sec": 15,
+        "max_chars": 8000
+    },
     "anti_slop_enabled": True,
     "max_steps": 25,
     "terminal_timeout_sec": 45,
@@ -301,6 +307,28 @@ def normalize_config(cfg: dict) -> dict:
         cfg["token_budget"] = max(0, int(float(raw_budget)))
     except (TypeError, ValueError):
         cfg["token_budget"] = 0
+
+    web_defaults = DEFAULT_CONFIG["web"]
+    web = cfg.get("web")
+    if not isinstance(web, dict):
+        web = {}
+    web = {**web_defaults, **web}
+    web["enabled"] = bool(web.get("enabled", True))
+    domains = web.get("allowed_domains")
+    web["allowed_domains"] = sorted({
+        str(item).lower().strip().lstrip(".")
+        for item in (domains if isinstance(domains, list) else [])
+        if isinstance(item, str) and item.strip()
+    })
+    try:
+        web["timeout_sec"] = max(5, min(60, int(web.get("timeout_sec", 15))))
+    except (TypeError, ValueError):
+        web["timeout_sec"] = web_defaults["timeout_sec"]
+    try:
+        web["max_chars"] = max(500, min(50000, int(web.get("max_chars", 8000))))
+    except (TypeError, ValueError):
+        web["max_chars"] = web_defaults["max_chars"]
+    cfg["web"] = web
 
     voice_defaults = DEFAULT_CONFIG["voice"]
     voice = cfg.get("voice")

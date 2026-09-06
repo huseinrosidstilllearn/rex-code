@@ -18,6 +18,7 @@ from rex.approval import request_approval, summarize_action
 from rex import checkpoints as _checkpoints
 from rex import todos as _todos
 from rex import diffs as _diffs
+from rex.websearch import web_search, web_fetch
 
 def _checkpoint_before(action: str, summary: str) -> None:
     """Snapshot workspace before a destructive action. Never blocks."""
@@ -866,6 +867,28 @@ TOOL_DEFINITIONS = [
         }
     },
     {
+        "name": "web_search",
+        "description": "Mencari di web via DuckDuckGo dan mengembalikan judul/link/snippet. Aktif di PLAN & BUILD.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Kata kunci pencarian"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "web_fetch",
+        "description": "Mengambil isi satu halaman web sebagai teks (domain publik; kena allowlist config web.allowed_domains bila diisi). Aktif di PLAN & BUILD.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "URL http/https yang akan diambil"}
+            },
+            "required": ["url"]
+        }
+    },
+    {
         "name": "git_status",
         "description": "Melihat ringkasan status git (branch, staged/unstaged/untracked). Aktif di PLAN & BUILD.",
         "parameters": {"type": "object", "properties": {}, "required": []}
@@ -1002,4 +1025,6 @@ TOOL_REGISTRY = {
     "run_command_bg": run_command_bg,
     "task_output": task_output,
     "task_kill": task_kill,
+    "web_search": web_search,
+    "web_fetch": web_fetch,
 }
