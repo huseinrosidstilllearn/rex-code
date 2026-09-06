@@ -815,6 +815,13 @@ class RexTUIApp(App):
             elif cmd == "/doctor":
                 from rex.review import format_doctor
                 chat.write(format_doctor())
+            elif cmd == "/export":
+                arg = (arguments or "md").strip().lower().lstrip(".") or "md"
+                if not self.session_id:
+                    chat.write("[yellow]Belum ada sesi aktif untuk diekspor.[/yellow]")
+                else:
+                    from rex.export import export_session
+                    chat.write(export_session(self.session_id, fmt=arg))
             elif cmd == "/compare":
                 question = text[len("/compare"):].strip()
                 if not question:
@@ -904,6 +911,7 @@ class RexTUIApp(App):
         chat.write(f"  [b]/settings[/b]  Toggle approval mode (confirm every BUILD action)")
         chat.write(f"  [b]/cost[/b]      Token usage for this session")
         chat.write(f"  [b]/resume[/b]    Continue a past session (/resume <n> to pick)")
+        chat.write(f"  [b]/export[/b]    Save this session as md or html")
         chat.write(f"  [b]/new[/b]       Start a fresh session (old one is kept)")
         chat.write(f"  [b]/init[/b]      Create REX.md project instructions")
         chat.write(f"  [b]/checkpoints[/b] List automatic snapshots")

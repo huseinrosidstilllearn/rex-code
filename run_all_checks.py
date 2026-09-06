@@ -44,6 +44,7 @@ CHECKS = [
     "test_hooks.py",
     "test_status.py",
     "test_websearch.py",
+    "test_export.py",
 ]
 
 
