@@ -77,11 +77,40 @@ Native TUI: `python rex/tui/cli_entry.py` · Classic CLI: `python cli.py`
 | `/n8n` | Generate webhook-AI workflow JSON for n8n/Activepieces. |
 | `/scheduler` | View cron jobs, trigger manually. |
 | `/anti-slop` | Audit & clean AI clichés in your text. |
+| `/cost` | Token usage for this session (prompt / completion / total). |
+| `/init` | Create `REX.md` — project instructions Rex reads every session. |
+| `/checkpoints` `/undo` `/redo` | Inspect & roll back automatic BUILD-action snapshots. |
 | `/files` | List workspace files. |
 | `/sessions` `/new` `/use <id>` `/delete <id>` | Session management. |
 | `/help` `/exit` | You guessed it. |
 
 The TUI adds a **Ctrl+P command palette** and `/theme` (rex, mono, amber, cyan, violet, rose, custom `#RRGGBB`).
+
+### Headless / CI mode
+
+```bash
+rex -p "explain this repo" --json          # one-shot, structured output
+rex -p "fix the failing test" --mode build # agent may write code
+rex -p "run checks" --mode build --yolo    # allow destructive actions unattended (default: DENY)
+```
+
+Exit code 0 on success, 1 on provider failure. `--json` emits `{response, mode, provider, model, session, usage, elapsed_ms}`.
+
+### Project context (REX.md + repo map)
+
+Rex automatically injects two context sources into every system prompt:
+- **`REX.md`** in your project root (create with `/init`) plus an optional global one in the Rex data dir — conventions, prohibitions, test commands.
+- **Repo map** — top-level structure, language stats, and key files; deterministic and always fresh.
+
+Both can be toggled in `config.json → context`. Long sessions are auto-compacted: older turns get LLM-summarized into a memory note instead of being truncated (`context.max_context_tokens`, default 60k).
+
+### MCP servers (stdio)
+
+```json
+"mcp": { "enabled": true, "servers": { "fetch": { "command": "uvx", "args": ["mcp-server-fetch"] } } }
+```
+
+Tools appear as `mcp_fetch_fetch` and merge into the tool registry like plugins. A broken server is skipped, never fatal.
 
 ---
 
@@ -214,18 +243,20 @@ row contract, history cap, minute dedup). A green run means it is safe to push.
 - [x] Windows installer + cross-platform release workflow
 - [x] Auto-update: daily check → download → install (opt-out per step)
 - [x] Per-action approval in BUILD mode — confirm each write/run (session allowlist, fail-open when off)
+- [x] **Retry & backoff** — exponential backoff with jitter on 429/5xx/timeouts; 401/403 fail fast
+- [x] **Token usage & `/cost`** — per-session prompt/completion/total token tracking
+- [x] **`/init` + `REX.md` project memory** — per-project + global instructions injected every session
+- [x] **Repo map** — deterministic project overview (structure, languages, key files) in the system prompt
+- [x] **Headless mode** — `rex -p "prompt" --json` for scripts and CI (deny-by-default on destructive actions)
+- [x] **Checkpoints & `/undo`** — shadow-git snapshot per BUILD action, instant rollback + `/redo`
+- [x] **Context compaction** — auto-summarize long sessions via LLM instead of truncating
+- [x] **MCP client (stdio)** — Model Context Protocol servers exposed as agent tools (`mcp_<server>_<tool>`)
 
 **Next — must-haves for a serious native agent (prioritized)**
 
-- [ ] **Checkpoints & `/undo`** — git snapshot per agent step, instant rollback of bad edits
-- [ ] **`/init` + `REX.md` project memory** — per-project + global custom instructions the agent always reads
-- [ ] **Context compaction** — auto-summarize long sessions instead of truncating history
-- [ ] **Repo map** — git-aware project overview injected into prompts (like Aider)
-- [ ] **Headless mode** — `rex -p "prompt" --json` for scripts and CI
-- [ ] **Token & cost tracking** — `/cost` per session/provider
 - [ ] **Diff review** — `/diff` before apply, approve/reject each edit
 - [ ] **Auto test-run hook** — run the project's test command after edits, feed failures back
-- [ ] **MCP client support** — standard tool protocol, beyond the custom plugin format
+- [ ] **MCP transports beyond stdio** — SSE / streamable HTTP
 - [ ] **Webhook HTTP host + FastAPI receiver** — wire `rex/webhooks.py` to an endpoint again
 - [ ] **winget/scoop distribution + code signing** — kill SmartScreen warnings for good
 

@@ -39,6 +39,11 @@ from rex.logging_setup import log
 _provider: Optional[Callable[[str, str], bool]] = None
 _provider_lock = threading.Lock()
 
+# Process-wide settings override (headless mode, tests). When set, takes
+# precedence over config.json so entry points can enforce a safety posture
+# without touching the user's on-disk configuration.
+_override_settings: Optional[dict] = None
+
 # session-level "always allow" patterns: {"action": ["glob", ...]}
 _session_allows: Dict[str, list] = {}
 _allows_lock = threading.Lock()
@@ -59,7 +64,15 @@ def reset_session_allows() -> None:
         _session_allows.clear()
 
 
+def set_override_settings(settings: Optional[dict]) -> None:
+    """Force approval settings for this process (None = read config.json)."""
+    global _override_settings
+    _override_settings = settings
+
+
 def _get_settings(cfg: Optional[dict] = None) -> dict:
+    if _override_settings is not None:
+        return _override_settings
     if cfg is None:
         from rex.config import load_config, normalize_config
         cfg = normalize_config(load_config())

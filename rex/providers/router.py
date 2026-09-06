@@ -9,7 +9,8 @@ import urllib.request
 import urllib.error
 import time
 from typing import List, Dict, Any, Optional
-from rex.providers.base import BaseLLMProvider, LLMResponse, StreamEvent
+from rex.providers.base import BaseLLMProvider, LLMResponse, StreamEvent, Usage
+from rex.retry import compute_backoff, parse_usage
 
 class OpenAIRouterProvider(BaseLLMProvider):
     def __init__(self, base_url: str, api_key: Optional[str] = None, model: str = "gpt-4o-mini", bearer_token: Optional[str] = None, timeout_sec: int = 120, retry_attempts: int = 3, retry_backoff_sec: float = 1):
@@ -30,7 +31,7 @@ class OpenAIRouterProvider(BaseLLMProvider):
                     raise
                 if attempt == self.retry_attempts - 1:
                     raise
-                time.sleep(self.retry_backoff_sec * (2 ** attempt))
+                time.sleep(compute_backoff(attempt, self.retry_backoff_sec))
 
     def chat(self, messages: List[Dict[str, Any]], system_prompt: str, tools: Optional[List[Dict[str, Any]]] = None) -> LLMResponse:
         url = f"{self.base_url}/chat/completions"
@@ -121,7 +122,7 @@ class OpenAIRouterProvider(BaseLLMProvider):
                     "args": args
                 })
 
-            return LLMResponse(content=content, tool_calls=tool_calls)
+            return LLMResponse(content=content, tool_calls=tool_calls, usage=Usage.from_dict(parse_usage(data)))
 
         except urllib.error.HTTPError as e:
             if e.code in (401, 403):
@@ -167,6 +168,7 @@ class OpenAIRouterProvider(BaseLLMProvider):
             headers["Authorization"] = f"Bearer {token}"
 
         emitted = False
+        stream_usage = None
         try:
             request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers)
             with self._open(request) as response:
@@ -174,6 +176,7 @@ class OpenAIRouterProvider(BaseLLMProvider):
                     data = json.loads(response.read().decode("utf-8"))
                     message = (data.get("choices") or [{}])[0].get("message", {})
                     final = self._response_from_message(message)
+                    final.usage = Usage.from_dict(parse_usage(data))
                     if final.content:
                         yield StreamEvent("text", final.content)
                     yield StreamEvent("final", final)
@@ -189,6 +192,8 @@ class OpenAIRouterProvider(BaseLLMProvider):
                     if value == "[DONE]":
                         break
                     chunk = json.loads(value)
+                    if chunk.get("usage"):
+                        stream_usage = parse_usage(chunk)
                     delta = (chunk.get("choices") or [{}])[0].get("delta", {})
                     text = delta.get("content") or ""
                     if text:
@@ -209,7 +214,7 @@ class OpenAIRouterProvider(BaseLLMProvider):
                     except json.JSONDecodeError:
                         args = {}
                     tool_calls.append({"id": call["id"] or None, "name": call["name"], "args": args})
-                yield StreamEvent("final", LLMResponse("".join(content_parts), tool_calls))
+                yield StreamEvent("final", LLMResponse("".join(content_parts), tool_calls, usage=Usage.from_dict(stream_usage)))
         except Exception:
             if emitted:
                 raise

@@ -15,6 +15,8 @@ from rex.providers.gemini import GeminiProvider
 from rex.anti_slop import clean_slop
 from rex.sessions import session_store
 from rex.logging_setup import log
+from rex.context_inject import build_context_prefix
+from rex.compaction import maybe_compact
 
 class StepEvent:
     def __init__(self, event_type: str, data: Any):
@@ -31,6 +33,8 @@ class RexAgent:
         )
         self.provider = get_llm_provider()
         self._abort = threading.Event()
+        # Cumulative token usage for this agent instance (all turns).
+        self.total_usage: Dict[str, int] = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
     def abort(self):
         """Request cooperative cancellation before next tool or provider step."""
@@ -40,6 +44,19 @@ class RexAgent:
         if self.session_id:
             message = session_store.append(self.session_id, message)
         self.messages.append(message)
+
+    def _accumulate_usage(self, usage) -> None:
+        """Add one response's usage into the cumulative totals (None-safe)."""
+        if usage is None:
+            return
+        prompt = getattr(usage, "prompt_tokens", None) or 0
+        completion = getattr(usage, "completion_tokens", None) or 0
+        total = getattr(usage, "total_tokens", None)
+        if total is None:
+            total = prompt + completion
+        self.total_usage["prompt_tokens"] += int(prompt)
+        self.total_usage["completion_tokens"] += int(completion)
+        self.total_usage["total_tokens"] += int(total)
 
     def _trim_history(self, limit: int):
         self.messages = self.messages[-max(1, int(limit)):]
@@ -51,6 +68,7 @@ class RexAgent:
 
     def reset(self):
         self.messages = []
+        self.total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         if isinstance(self.provider, GeminiProvider):
             self.provider.reset_session()
 
@@ -69,9 +87,18 @@ class RexAgent:
         """
         cfg = load_config()
         self._abort.clear()
+        # Compaction first (LLM summary), then safe trim as backstop.
+        try:
+            compacted, did_compact = maybe_compact(self.messages)
+            if did_compact:
+                self.messages = compacted
+                log.info("context_compacted messages=%d", len(self.messages))
+        except Exception:
+            pass
         self._trim_history(cfg.get("max_history_messages", 40))
         mode = get_active_mode()
         system_prompt = PLAN_MODE_PROMPT if mode == "plan" else BUILD_MODE_PROMPT
+        system_prompt = system_prompt + build_context_prefix(mode)
         self.provider = get_llm_provider()
 
         # Branch 1: Gemini Provider (uses official GenAI SDK with native tool loop)
@@ -99,11 +126,14 @@ class RexAgent:
                             on_step(StepEvent("stream_delta", event.data))
                         elif event.kind == "final":
                             final_response = event.data.content
+                            self._accumulate_usage(getattr(event.data, "usage", None))
                 else:
-                    final_response = self.provider.chat_simple(
+                    final_llm_response = self.provider.chat_simple_with_usage(
                         message=user_input, system_prompt=system_prompt,
                         on_tool_callback=on_tool, history=history,
                     )
+                    final_response = final_llm_response.content
+                    self._accumulate_usage(final_llm_response.usage)
             except Exception as error:
                 log.error("provider_error type=%s session=%s", type(error).__name__, self.session_id or "none")
                 final_response = "Provider gagal memproses permintaan. Periksa konfigurasi dan logs/rex.log."
@@ -141,6 +171,7 @@ class RexAgent:
                             on_step(StepEvent("stream_delta", event.data))
                         elif event.kind == "final":
                             resp = event.data
+                            self._accumulate_usage(getattr(event.data, "usage", None))
                     if not resp:
                         raise RuntimeError("Provider stream selesai tanpa respons final")
                 else:
@@ -149,6 +180,7 @@ class RexAgent:
                         system_prompt=system_prompt,
                         tools=tools_definitions
                     )
+                    self._accumulate_usage(getattr(resp, "usage", None))
 
                 if resp.has_tool_calls():
                     assistant_message = {

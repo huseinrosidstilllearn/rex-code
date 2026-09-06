@@ -6,13 +6,15 @@ Handles thought signatures and automatic tool execution natively.
 
 import inspect
 import os
+import time
 from typing import List, Dict, Any, Optional, Callable
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 from rex.config import ENV_FILE, load_config
 from rex.plugins import effective_tool_registry
-from rex.providers.base import BaseLLMProvider, LLMResponse, StreamEvent
+from rex.providers.base import BaseLLMProvider, LLMResponse, StreamEvent, Usage
+from rex.retry import compute_backoff
 
 load_dotenv(ENV_FILE)
 
@@ -90,6 +92,20 @@ def _build_wrapped_tool(name: str, func: Callable, on_tool_callback, max_chars: 
     }
     return wrapped
 
+
+def _usage_from_gemini(response: Any) -> Optional[Usage]:
+    """Extract token usage from a Gemini GenerateContentResponse."""
+    meta = getattr(response, "usage_metadata", None)
+    if meta is None:
+        return None
+    prompt = getattr(meta, "prompt_token_count", None)
+    completion = getattr(meta, "candidates_token_count", None)
+    total = getattr(meta, "total_token_count", None)
+    if prompt is None and completion is None and total is None:
+        return None
+    return Usage(prompt, completion, total)
+
+
 class GeminiProvider(BaseLLMProvider):
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-flash-latest"):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
@@ -124,43 +140,51 @@ class GeminiProvider(BaseLLMProvider):
 
     def chat_simple(self, message: str, system_prompt: str, on_tool_callback: Optional[Callable[[str, dict], None]] = None, history: Optional[List[Dict[str, Any]]] = None) -> str:
         """Run one Gemini chat turn with automatic tools."""
+        return self.chat_simple_with_usage(message, system_prompt, on_tool_callback, history).content
+
+    def chat_simple_with_usage(self, message: str, system_prompt: str, on_tool_callback: Optional[Callable[[str, dict], None]] = None, history: Optional[List[Dict[str, Any]]] = None) -> LLMResponse:
+        """Run one Gemini chat turn, returning content plus token usage."""
         self._ensure_session(system_prompt, on_tool_callback, history)
 
-        # Retry on rate limit spikes
-        import time
-        for attempt in range(3):
+        for attempt in range(4):
             try:
                 resp = self.chat_session.send_message(message)
-                return resp.text or ""
+                return LLMResponse(resp.text or "", usage=_usage_from_gemini(resp))
             except Exception as e:
                 err_str = str(e)
-                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                    time.sleep(3 * (attempt + 1))
+                transient = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "500" in err_str or "503" in err_str
+                if transient and attempt < 3:
+                    time.sleep(compute_backoff(attempt, 1.0))
                     continue
                 raise e
-        return "(Batas permintaan rate-limit tercapai, silakan tunggu beberapa detik dan coba lagi)"
+        return LLMResponse("(Batas permintaan rate-limit tercapai, silakan tunggu beberapa detik dan coba lagi)")
 
     def chat_simple_stream(self, message: str, system_prompt: str, on_tool_callback: Optional[Callable[[str, dict], None]] = None, history: Optional[List[Dict[str, Any]]] = None):
         """Yield Gemini text deltas, then one final LLMResponse."""
         self._ensure_session(system_prompt, on_tool_callback, history)
-        import time
-        for attempt in range(3):
+        for attempt in range(4):
             emitted = False
             parts = []
             try:
+                final_usage = None
                 for chunk in self.chat_session.send_message_stream(message):
                     text = chunk.text or ""
+                    chunk_usage = _usage_from_gemini(chunk)
+                    if chunk_usage is not None:
+                        final_usage = chunk_usage
                     if text:
                         emitted = True
                         parts.append(text)
                         yield StreamEvent("text", text)
-                yield StreamEvent("final", LLMResponse("".join(parts)))
+                yield StreamEvent("final", LLMResponse("".join(parts), usage=final_usage))
                 return
             except Exception as error:
                 if emitted:
                     raise
-                if "429" in str(error) or "RESOURCE_EXHAUSTED" in str(error):
-                    time.sleep(3 * (attempt + 1))
+                err_str = str(error)
+                transient = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "500" in err_str or "503" in err_str
+                if transient and attempt < 3:
+                    time.sleep(compute_backoff(attempt, 1.0))
                     continue
                 raise
         message = "(Batas permintaan rate-limit tercapai, silakan tunggu beberapa detik dan coba lagi)"
@@ -172,5 +196,4 @@ class GeminiProvider(BaseLLMProvider):
         Fallback chat method conforming to BaseLLMProvider.
         """
         last_msg = messages[-1].get("content", "") if messages else ""
-        res_text = self.chat_simple(last_msg, system_prompt)
-        return LLMResponse(content=res_text, tool_calls=[])
+        return self.chat_simple_with_usage(last_msg, system_prompt)

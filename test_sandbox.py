@@ -97,7 +97,9 @@ with patch.dict(os.environ, {
     result, process = run_build("python --version")
 kwargs = process.call_args.kwargs
 argv = process.call_args.args[0]
-check("safe command executes", process.call_count == 1 and "ok" in result)
+# Checkpoint git calls (before the command) share the patched subprocess,
+# so assert on the FINAL call = the real command invocation.
+check("safe command executes", process.call_count >= 1 and "ok" in result)
 check("argv built through shell abstraction", argv[0] in ("powershell", "bash") and "python --version" in argv)
 check("configured timeout used", kwargs["timeout"] == 7)
 check("workspace cwd used", kwargs["cwd"].name == "workspace")

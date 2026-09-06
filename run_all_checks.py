@@ -20,6 +20,12 @@ CHECKS = [
     "test_updates.py",
     "test_scheduler.py",
     "test_approval.py",
+    "test_retry.py",
+    "test_context.py",
+    "test_headless.py",
+    "test_checkpoints.py",
+    "test_compaction.py",
+    "test_mcp.py",
 ]
 
 

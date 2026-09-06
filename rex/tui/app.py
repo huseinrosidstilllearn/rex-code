@@ -511,6 +511,37 @@ class RexTUIApp(App):
                     chat.write(f"[dim]Available: {', '}.join(list_presets())]/dim")
             elif cmd == "/models":
                 chat.write("[dim]Edit config.json to switch providers/models.[/dim]")
+            elif cmd == "/cost":
+                usage = getattr(self.agent, "total_usage", None) or {} if self.agent else {}
+                chat.write(
+                    f"[dim]Session tokens — prompt: {usage.get('prompt_tokens', 0):,} · "
+                    f"completion: {usage.get('completion_tokens', 0):,} · "
+                    f"total: {usage.get('total_tokens', 0):,}[/dim]"
+                )
+            elif cmd == "/init":
+                from rex.context_inject import create_rex_md
+                created, path = create_rex_md()
+                if created:
+                    chat.write(f"[green]REX.md created at {path}[/green]")
+                else:
+                    chat.write(f"[yellow]REX.md already exists at {path} — untouched.[/yellow]")
+            elif cmd == "/checkpoints":
+                from rex.checkpoints import format_checkpoints_table
+                chat.write(format_checkpoints_table())
+            elif cmd == "/undo":
+                from rex.checkpoints import undo
+                result = undo()
+                if result:
+                    chat.write(f"[green]Workspace restored to {result['previous'][:9]}[/green] (previous state saved — /redo to revert)")
+                else:
+                    chat.write("[yellow]Nothing to undo.[/yellow]")
+            elif cmd == "/redo":
+                from rex.checkpoints import redo
+                result = redo()
+                if result:
+                    chat.write(f"[green]Pre-undo state restored ({result['restored'][:9]})[/green]")
+                else:
+                    chat.write("[yellow]Nothing to redo.[/yellow]")
             elif cmd == "/help":
                 self._show_help(chat)
             elif cmd in ("/exit", "/quit"):
@@ -529,6 +560,11 @@ class RexTUIApp(App):
         chat.write(f"  [b]/plan[/b]      Plan mode (read-only analysis)")
         chat.write(f"  [b]/build[/b]     Build mode (autonomous execution)")
         chat.write(f"  [b]/settings[/b]  Toggle approval mode (confirm every BUILD action)")
+        chat.write(f"  [b]/cost[/b]      Token usage for this session")
+        chat.write(f"  [b]/init[/b]      Create REX.md project instructions")
+        chat.write(f"  [b]/checkpoints[/b] List automatic snapshots")
+        chat.write(f"  [b]/undo[/b]      Roll workspace back one checkpoint")
+        chat.write(f"  [b]/redo[/b]      Re-apply the last undo")
         chat.write(f"  [b]/theme <n>[/b] Change theme: rex mono amber cyan violet rose custom")
         chat.write(f"  [b]/help[/b]      Show this help")
         chat.write(f"  [b]/exit[/b]      Exit")

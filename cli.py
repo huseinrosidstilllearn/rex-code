@@ -6,6 +6,8 @@ Interactive terminal with Plan/Build mode, OpenCode model switcher, and rich for
 
 import sys
 import os
+import argparse
+import json as _json
 from pathlib import Path
 
 # Add project root to sys.path
@@ -107,6 +109,11 @@ def show_help():
     table.add_row("/n8n", "Generate template workflow otomasi n8n (JSON siap import)")
     table.add_row("/anti-slop", "Audit dan bersihkan teks dari buzzword & pola klise AI")
     table.add_row("/settings", "Ubah konfigurasi interaktif (mode, anti-slop, stream, voice, max-steps)")
+    table.add_row("/cost", "Total token terpakai sesi ini (prompt/completion/total)")
+    table.add_row("/init", "Buat REX.md — instruksi proyek yang Rex baca tiap sesi")
+    table.add_row("/checkpoints", "Riwayat checkpoint (snapshot otomatis tiap aksi BUILD)")
+    table.add_row("/undo", "Kembalikan workspace ke checkpoint sebelumnya")
+    table.add_row("/redo", "Batalkan undo terakhir")
     table.add_row("/scheduler", "Lihat daftar jobs dan trigger manual")
     table.add_row("/voice", "Voice input (Whisper): rekam suara, langsung jadi instruksi")
     table.add_row("/files", "Lihat daftar file di workspace/")
@@ -390,6 +397,21 @@ def check_updates_background():
 
 
 def main():
+    parser = argparse.ArgumentParser(prog="rex", description="Rex Code — AI coding agent di terminal")
+    parser.add_argument("-p", "--prompt", help="Jalankan satu prompt non-interaktif (headless) lalu keluar")
+    parser.add_argument("--json", action="store_true", help="Output JSON terstruktur (untuk -p)")
+    parser.add_argument("--mode", choices=["plan", "build"], help="Set mode sebelum eksekusi")
+    parser.add_argument("--session", help="Pakai session ID yang sudah ada")
+    parser.add_argument("--yolo", action="store_true", help="Headless: izinkan aksi destruktif tanpa konfirmasi (default: TOLAK semua)")
+    parser.add_argument("--version", action="version", version=f"Rex Code v{__version__}")
+    args = parser.parse_args()
+
+    if args.prompt is not None:
+        from rex.headless import run_headless, format_result_text, format_result_json
+        result = run_headless(args.prompt, session_id=args.session, mode=args.mode, yolo=args.yolo)
+        print(format_result_json(result) if args.json else format_result_text(result))
+        sys.exit(0 if result.get("ok") and not result.get("provider_failed") else 1)
+
     print_banner()
     print_welcome_panel()
     pid, _, model = get_active_provider_info()
@@ -445,6 +467,43 @@ def main():
             continue
         elif user_input == "/settings":
             handle_settings()
+            continue
+        elif user_input == "/cost":
+            usage = getattr(agent, "total_usage", None) or {}
+            console.print("[bold]Pemakaian token sesi ini:[/bold]")
+            console.print(f"  Prompt     : {usage.get('prompt_tokens', 0):,}")
+            console.print(f"  Completion : {usage.get('completion_tokens', 0):,}")
+            console.print(f"  Total      : {usage.get('total_tokens', 0):,}")
+            if usage.get("total_tokens", 0) == 0:
+                console.print("[dim](beberapa provider tidak melaporkan usage)")
+            continue
+        elif user_input == "/init":
+            from rex.context_inject import create_rex_md
+            created, path = create_rex_md()
+            if created:
+                console.print(f"[green]REX.md dibuat di {path}[/green] — edit sesuai konvensi proyek Anda.")
+            else:
+                console.print(f"[yellow]REX.md sudah ada di {path} — tidak diubah.[/yellow]")
+            continue
+        elif user_input == "/checkpoints":
+            from rex.checkpoints import format_checkpoints_table
+            console.print(format_checkpoints_table())
+            continue
+        elif user_input == "/undo":
+            from rex.checkpoints import undo
+            result = undo()
+            if result:
+                console.print(f"[green]Workspace dikembalikan ke {result['previous'][:9]}[/green] (keadaan sebelumnya tersimpan — /redo untuk membatalkan)")
+            else:
+                console.print("[yellow]Tidak ada yang bisa di-undo.[/yellow]")
+            continue
+        elif user_input == "/redo":
+            from rex.checkpoints import redo
+            result = redo()
+            if result:
+                console.print(f"[green]Keadaan sebelum undo dipulihkan ({result['restored'][:9]})[/green]")
+            else:
+                console.print("[yellow]Tidak ada yang bisa di-redo.[/yellow]")
             continue
         elif user_input == "/scheduler":
             handle_scheduler()

@@ -117,6 +117,15 @@ DEFAULT_CONFIG = {
         "actions": [],
         "allow": {}
     },
+    "context": {
+        "project_memory": True,
+        "repo_map": True,
+        "max_context_tokens": 60000
+    },
+    "mcp": {
+        "enabled": True,
+        "servers": {}
+    },
     "scheduler": {
         "enabled": True,
         "jobs": [
@@ -310,6 +319,42 @@ def normalize_config(cfg: dict) -> dict:
             })
     scheduler["jobs"] = normalized_jobs
     cfg["scheduler"] = scheduler
+
+    context_defaults = DEFAULT_CONFIG["context"]
+    context = cfg.get("context")
+    if not isinstance(context, dict):
+        context = {}
+    context = {**context_defaults, **context}
+    context["project_memory"] = bool(context.get("project_memory", True))
+    context["repo_map"] = bool(context.get("repo_map", True))
+    try:
+        context["max_context_tokens"] = max(2000, int(context.get("max_context_tokens", 60000)))
+    except (TypeError, ValueError):
+        context["max_context_tokens"] = context_defaults["max_context_tokens"]
+    cfg["context"] = context
+
+    mcp_defaults = DEFAULT_CONFIG["mcp"]
+    mcp = cfg.get("mcp")
+    if not isinstance(mcp, dict):
+        mcp = {}
+    mcp = {**mcp_defaults, **mcp}
+    mcp["enabled"] = bool(mcp.get("enabled", True))
+    servers = mcp.get("servers")
+    if not isinstance(servers, dict):
+        servers = {}
+    valid_servers = {}
+    for name, server_cfg in servers.items():
+        if isinstance(name, str) and name.strip() and isinstance(server_cfg, dict) and isinstance(server_cfg.get("command"), str) and server_cfg["command"].strip():
+            entry = {
+                "command": server_cfg["command"].strip(),
+                "args": [str(a) for a in server_cfg.get("args") or []],
+            }
+            env = server_cfg.get("env")
+            if isinstance(env, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in env.items()):
+                entry["env"] = env
+            valid_servers[name.strip()] = entry
+    mcp["servers"] = valid_servers
+    cfg["mcp"] = mcp
 
     updates_defaults = DEFAULT_CONFIG["updates"]
     updates = cfg.get("updates")

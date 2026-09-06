@@ -42,6 +42,8 @@ from typing import Callable, Dict, List, Tuple
 
 from rex.config import PLUGINS_DIR, load_config, normalize_config
 from rex.logging_setup import log
+from rex.mcp import mcp_tool_definitions as _mcp_definitions
+from rex.mcp import mcp_tool_registry as _mcp_registry
 
 
 def _discover_plugin_files() -> List[Path]:
@@ -166,12 +168,22 @@ def plugin_registry() -> Dict[str, Callable]:
 
 
 def effective_tool_definitions() -> List[dict]:
-    """Built-in tool schemas plus plugin tool schemas."""
+    """Built-in tool schemas plus plugin and MCP tool schemas."""
     from rex.tools import TOOL_DEFINITIONS
-    return list(TOOL_DEFINITIONS) + plugin_tool_definitions()
+    definitions = list(TOOL_DEFINITIONS) + plugin_tool_definitions()
+    try:
+        definitions = definitions + _mcp_definitions()
+    except Exception:
+        pass  # MCP must never break tool listing
+    return definitions
 
 
 def effective_tool_registry() -> Dict[str, Callable]:
-    """Built-in tool handlers plus plugin tool handlers."""
+    """Built-in tool handlers plus plugin and MCP tool handlers."""
     from rex.tools import TOOL_REGISTRY
-    return {**TOOL_REGISTRY, **plugin_registry()}
+    registry = {**TOOL_REGISTRY, **plugin_registry()}
+    try:
+        registry.update(_mcp_registry())
+    except Exception:
+        pass
+    return registry
