@@ -25,7 +25,7 @@ import base64
 import mimetypes
 import re
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from rex.logging_setup import log
 
@@ -34,6 +34,7 @@ MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_TEXT_CHARS = 20_000
 
 # @path token: no whitespace inside; allows ./ ../ subdirs and common name chars.
+# ``@path/file.py:Symbol`` inlines only that symbol's source span (code index).
 AT_REF_RE = re.compile(r"@([^\s@]+)")
 
 
@@ -58,7 +59,8 @@ def extract_references(text: str, base_dir: Path = None) -> Tuple[str, List[Path
 
     for match in AT_REF_RE.finditer(text):
         token = match.group(1)
-        candidate = (base_dir / token).resolve()
+        path_token, _, symbol_ref = token.partition(":")
+        candidate = (base_dir / path_token).resolve()
         if not candidate.is_file():
             notes.append(f"@{token}: file tidak ditemukan")
             consumed_spans.append(match.span())
@@ -87,10 +89,18 @@ def extract_references(text: str, base_dir: Path = None) -> Tuple[str, List[Path
                 notes.append(f"@{token}: file biner tidak di-inline")
                 consumed_spans.append(match.span())
                 continue
-            content = raw[:MAX_TEXT_CHARS]
-            if len(raw) > MAX_TEXT_CHARS:
-                content += "\n...[dipotong]"
-            notes.append(f"Isi @{token}:\n```\n{content}\n```")
+            if symbol_ref:
+                content = _symbol_excerpt(raw, symbol_ref, candidate)
+                if content is None:
+                    notes.append(f"@{token}: simbol '{symbol_ref}' tidak ditemukan")
+                    consumed_spans.append(match.span())
+                    continue
+                notes.append(f"Isi @{token} (cuplikan):\n```\n{content}\n```")
+            else:
+                content = raw[:MAX_TEXT_CHARS]
+                if len(raw) > MAX_TEXT_CHARS:
+                    content += "\n...[dipotong]"
+                notes.append(f"Isi @{token}:\n```\n{content}\n```")
         consumed_spans.append(match.span())
 
     # Remove consumed @tokens, keep everything else intact.
@@ -105,6 +115,23 @@ def extract_references(text: str, base_dir: Path = None) -> Tuple[str, List[Path
     if inlined or dropped:
         clean = (clean + "\n\n" + "\n\n".join(inlined + dropped)).strip()
     return clean, attachments, notes
+
+
+def _symbol_excerpt(raw: str, symbol_ref: str, candidate: Path) -> Optional[str]:
+    """Source lines for one symbol via the code index; None when absent."""
+    try:
+        from rex.codeindex import locate_symbol_span
+        span = locate_symbol_span(raw, symbol_ref, python=candidate.suffix == ".py")
+    except Exception:
+        return None
+    if span is None:
+        return None
+    start, end = span
+    lines = raw.splitlines()[start - 1:end]
+    excerpt = "\n".join(lines)
+    if len(excerpt) > MAX_TEXT_CHARS:
+        excerpt = excerpt[:MAX_TEXT_CHARS] + "\n...[dipotong]"
+    return excerpt
 
 
 def gemini_parts(attachments: List[Path]) -> List[Dict[str, str]]:

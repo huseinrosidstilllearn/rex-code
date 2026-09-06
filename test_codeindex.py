@@ -95,6 +95,67 @@ def main():
         persisted = root / ".rex" / "index.json"
         check("index file written", persisted.is_file())
 
+        # ── 7. @file:symbol spans (locate_symbol_span) ───────────────────
+        from rex.codeindex import complete_reference, locate_symbol_span
+
+        py_source = (
+            "import os\n\n"
+            "def check_auth(token):\n"
+            "    return bool(token)\n"
+            "\n"
+            "class AuthService:\n"
+            "    attr = 1\n"
+            "\n"
+            "    def refresh(self):\n"
+            "        return 2\n"
+            "\n"
+            "def tail_fn():\n"
+            "    pass\n"
+        )
+        span = locate_symbol_span(py_source, "check_auth", python=True)
+        lines = py_source.splitlines()
+        check("def span exact", span == (3, 4))
+        check("def span content", lines[span[0] - 1].startswith("def check_auth") and lines[span[1] - 1] == "    return bool(token)")
+
+        span = locate_symbol_span(py_source, "authservice", python=True)  # case-insensitive
+        class_text = "\n".join(lines[span[0] - 1:span[1]]) if span else ""
+        check("class span includes methods", "class AuthService" in class_text and "def refresh" in class_text and "return 2" in class_text)
+        check("class span ends before tail_fn", "tail_fn" not in class_text)
+
+        check("partial name match", locate_symbol_span(py_source, "auth", python=True) is not None)
+        check("unknown symbol -> None", locate_symbol_span(py_source, "zzz_none", python=True) is None)
+        check("empty symbol -> None", locate_symbol_span(py_source, "", python=True) is None)
+
+        js_source = "function boot() {\n  return 1;\n}\n\nfunction helper() {\n  return 2;\n}\n"
+        span = locate_symbol_span(js_source, "boot", python=False)
+        check("generic span ends at next symbol", span == (1, 3))
+        check("generic last symbol to EOF", locate_symbol_span(js_source, "helper", python=False) == (5, 7))
+
+        # ── 8. complete_reference (@ autocomplete) ───────────────────────
+        index = build_index(force=True, root=root)
+        check("complete by path prefix", "rex/auth.py" in complete_reference(index, "rex/auth"))
+        check("complete by substring", "rex/core.py" in complete_reference(index, "core"))
+        check("complete by filename", "app.js" in complete_reference(index, "app."))
+        check("complete respects limit", len(complete_reference(index, "", limit=3)) == 0)  # empty token -> none
+        check("no match -> empty", complete_reference(index, "zzz_none") == [])
+
+        sym = complete_reference(index, "rex/auth.py:auth")
+        check("complete file:symbol", "rex/auth.py:check_auth" in sym)
+        check("complete symbol exact", "rex/auth.py:added_fn" in complete_reference(index, "rex/auth.py:added"))
+
+        # ── 9. vision integration: @file:symbol inlines the span ────────
+        from rex.vision import extract_references
+        prompt, attachments, notes = extract_references(
+            "jelaskan @rex/auth.py:check_auth sekilas", base_dir=root
+        )
+        joined = "\n".join(notes)
+        check("symbol excerpt inlined", "Isi @rex/auth.py:check_auth (cuplikan):" in joined)
+        check("excerpt scoped to span", "def check_auth" in joined and "added_fn" not in joined)
+        prompt2, _, notes2 = extract_references("cari @rex/auth.py:missing_sym", base_dir=root)
+        check("missing symbol noted", any("tidak ditemukan" in n for n in notes2))
+        prompt3, _, notes3 = extract_references("baca @rex/auth.py", base_dir=root)
+        check("plain @file still full inline", any("Isi @rex/auth.py:" in n and "return 1" in n for n in notes3))
+
     print("\nCodeindex checks ALL PASS")
 
 

@@ -359,6 +359,7 @@ A green run means it is safe to push.
 - [x] **Background shell tasks** — `run_command_bg` starts long-running commands (dev servers, builds) without blocking the conversation; `task_output` tails output (optional wait up to 30s) and `task_kill` stops them; same sandbox, approval gate and checkpoint as `run_command`, max 8 concurrent
 - [x] **`/status` report** — one aggregated health view across every subsystem: version, provider + API keys, fallback chain, MCP servers, plugins, hooks, scheduler jobs, sessions, checkpoints, updater, approval and token budget — config-level only, instant, side-effect free
 - [x] **`web_search` + `web_fetch`** — read-only research tools (DuckDuckGo HTML, no API key, no new dependency); private/link-local hosts and non-http schemes blocked (SSRF-safe), optional domain allowlist (`web.allowed_domains`), every response secret-redacted and size-capped, approval-gateable
+- [x] **`@` autocomplete + `@file:symbol`** — typing `@` in the TUI suggests files (Tab to complete/cycle); `@path/file.py:ClassName` inlines only that symbol's source span instead of the whole file (code-index powered)
 
 **Next — must-haves for a serious native agent (prioritized)**
 

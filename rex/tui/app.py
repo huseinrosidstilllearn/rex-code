@@ -13,7 +13,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen
-from textual.widgets import Header, Footer, RichLog, Input, Label, ListView, ListItem
+from textual.widgets import Header, Footer, RichLog, Input, Label, ListView, ListItem, Static
 from textual.reactive import reactive
 from textual.message import Message
 
@@ -212,12 +212,95 @@ class ChatArea(RichLog):
         self.write("")
 
 
+class PromptInput(Input):
+    """Input with Tab-completion for ``@file`` / ``@file:symbol`` tokens."""
+
+    BINDINGS = [Binding("tab", "complete_at", "Complete @", show=False)]
+
+    def action_complete_at(self) -> None:
+        try:
+            bar = self.app.query_one("#prompt-bar", PromptBar)
+        except Exception:
+            return
+        token = bar.current_at_token(self.value)
+        if not token:
+            return
+        if bar._at_token != token or not bar._at_candidates:
+            bar._at_token = token
+            bar._at_candidates = bar.at_candidates(token)
+            bar._at_index = 0
+        if not bar._at_candidates:
+            return
+        choice = bar._at_candidates[bar._at_index % len(bar._at_candidates)]
+        bar._at_index += 1
+        prefix_end = self.cursor_position
+        prefix = self.value[:prefix_end]
+        start = prefix.rfind("@" + token)
+        if start < 0:
+            return
+        self.value = self.value[:start] + "@" + choice + self.value[prefix_end:]
+        self.cursor_position = start + len(choice) + 1
+
+
 class PromptBar(Container):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._index = None
+        self._index_at = 0.0
+        self._at_token = ""
+        self._at_candidates: list = []
+        self._at_index = 0
+
     def compose(self) -> ComposeResult:
-        yield Input(placeholder="Type a message... (/, up/down for history)", id="prompt-input")
+        yield PromptInput(placeholder="Type a message... (/, @ for files, up/down for history)", id="prompt-input")
+        yield Static("", id="at-suggestions")
 
     def on_mount(self) -> None:
         self.query_one("#prompt-input", Input).focus()
+
+    def _get_index(self) -> dict:
+        import time as _time
+        now = _time.monotonic()
+        if self._index is None or now - self._index_at > 30:
+            try:
+                from rex.codeindex import build_index
+                self._index = build_index()
+            except Exception:
+                self._index = {}
+            self._index_at = now
+        return self._index or {}
+
+    def current_at_token(self, text: str) -> str:
+        """The trailing ``@token`` (without '@') at the cursor, or ''."""
+        before = text[: self.query_one("#prompt-input", Input).cursor_position]
+        piece = before.split()[-1] if before.split() else ""
+        if piece.startswith("@") and len(piece) > 1:
+            return piece[1:]
+        return ""
+
+    def at_candidates(self, token: str) -> list:
+        try:
+            from rex.codeindex import complete_reference
+            return complete_reference(self._get_index(), token)
+        except Exception:
+            return []
+
+    @on(Input.Changed, "#prompt-input")
+    def _on_changed(self, event: Input.Changed) -> None:
+        try:
+            suggestions = self.query_one("#at-suggestions", Static)
+            token = self.current_at_token(event.value)
+            candidates = self.at_candidates(token) if token else []
+            if not candidates:
+                suggestions.remove_class("has-suggestions")
+                suggestions.update("")
+                return
+            suggestions.add_class("has-suggestions")
+            shown = "  ".join(candidates[:3])
+            extra = f"  (+{len(candidates) - 3})" if len(candidates) > 3 else ""
+            suggestions.update(f"[dim green]@{token} → {shown}{extra}[/dim green] [dim](Tab)[/dim]")
+        except Exception:
+            pass  # suggestions are cosmetic
 
     @on(Input.Submitted, "#prompt-input")
     def on_submit(self, event: Input.Submitted) -> None:
@@ -225,6 +308,10 @@ class PromptBar(Container):
         if text:
             self.post_message(PromptSubmitted(text))
         event.input.value = ""
+        try:
+            self.query_one("#at-suggestions", Static).update("")
+        except Exception:
+            pass
 
 
 class CommandPalette(Container):
@@ -373,9 +460,11 @@ class RexTUIApp(App):
     #status-inner { width: 1fr; height: 1; padding: 0 2; layout: horizontal; align: center middle; }
     .sep { color: $rex-dim; }
     ChatArea { height: 1fr; padding: 1 2; background: $rex-bg; border: none; }
-    PromptBar { height: 3; background: $rex-subtle; border-top: solid $rex-dim; }
+    PromptBar { height: auto; background: $rex-subtle; border-top: solid $rex-dim; }
     #prompt-input { background: $rex-bg; border: solid $rex-dim; color: $zinc-200; padding: 0 1; }
     #prompt-input:focus { border: solid $rex-primary; }
+    #at-suggestions { height: 1; color: $zinc-400; padding: 0 1; display: none; }
+    #at-suggestions.has-suggestions { display: block; }
     Header { background: $rex-subtle; color: $rex-primary; border: none; }
     Footer { background: $rex-subtle; color: $zinc-500; border: none; }
     CommandPalette > Container { width: 65; max-height: 40; background: $rex-subtle; border: solid $rex-mid; padding: 1 2; }

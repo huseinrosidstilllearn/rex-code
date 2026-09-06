@@ -266,3 +266,87 @@ def format_import_graph(index: Dict, max_edges: int = 60) -> str:
             lines.append("  …[dipotong]")
             break
     return "\n".join(lines)
+
+
+# ── @file:symbol references + @ autocomplete ─────────────────────────
+
+MAX_SYMBOL_SPAN_LINES = 400
+MAX_COMPLETIONS = 6
+
+
+def locate_symbol_span(source: str, symbol: str, python: bool = True) -> Optional[tuple]:
+    """
+    Locate a def/class/function by name in source; returns the 1-based
+    inclusive (start, end) line span, or None when not found.
+
+    For Python the block ends at the first later line whose indentation is
+    not deeper than the definition line (so a class span includes its
+    methods); for other languages it ends where the next symbol starts.
+    The span is capped at MAX_SYMBOL_SPAN_LINES lines.
+    """
+    symbol = (symbol or "").strip()
+    if not symbol:
+        return None
+    lines = source.splitlines()
+    if not lines:
+        return None
+    symbols = _python_symbols(source) if python else _generic_symbols(source)
+    lowered = symbol.lower()
+    matches = [s for s in symbols if s["name"].lower() == lowered]
+    if not matches:
+        matches = [s for s in symbols if lowered in s["name"].lower()]
+    if not matches:
+        return None
+    start = min(s["line"] for s in matches)
+
+    if python:
+        def_line = lines[start - 1]
+        base_indent = len(def_line) - len(def_line.lstrip())
+        end = len(lines)
+        for offset in range(start, len(lines)):
+            line = lines[offset]
+            if not line.strip():
+                continue
+            indent = len(line) - len(line.lstrip())
+            if indent <= base_indent:
+                end = offset  # 1-based inclusive: previous line
+                break
+    else:
+        later = [s["line"] for s in symbols if s["line"] > start]
+        end = (min(later) - 1) if later else len(lines)
+    end = min(end, start - 1 + MAX_SYMBOL_SPAN_LINES)
+    while end > start and not lines[end - 1].strip():
+        end -= 1  # don't trail blank lines behind the block
+    return (start, max(start, end))
+
+
+def complete_reference(index: Dict, token: str, limit: int = MAX_COMPLETIONS) -> List[str]:
+    """
+    Candidates for an ``@``-token as the user types (token excludes '@').
+
+    ``@cor``            -> files whose path contains 'cor'
+    ``@rex/core.py``    -> exact/partial file paths
+    ``@rex/core.py:loc``-> symbols in that file matching 'loc'
+    Returns at most ``limit`` suggestions; empty when nothing matches.
+    """
+    token = (token or "").strip()
+    if not token:
+        return []
+    files = index.get("files") or {}
+    if ":" in token:
+        path_part, _, sym = token.partition(":")
+        rels = [rel for rel in sorted(files) if _path_matches(rel, path_part)][:3]
+        out: List[str] = []
+        for rel in rels:
+            for symbol in files[rel].get("symbols") or []:
+                if sym.lower() in symbol["name"].lower():
+                    out.append(f"{rel}:{symbol['name']}")
+                    if len(out) >= limit:
+                        return out
+        return out
+    return [rel for rel in sorted(files) if _path_matches(rel, token)][:limit]
+
+
+def _path_matches(rel: str, token: str) -> bool:
+    lowered = token.lower()
+    return rel.lower().startswith(lowered) or f"/{lowered}" in rel.lower() or lowered in Path(rel).name.lower()
