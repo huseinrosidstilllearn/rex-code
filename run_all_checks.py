@@ -30,6 +30,7 @@ CHECKS = [
     "test_failover.py",
     "test_review.py",
     "test_stats.py",
+    "test_autogit.py",
 ]
 
 

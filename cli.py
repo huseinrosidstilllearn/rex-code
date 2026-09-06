@@ -114,6 +114,8 @@ def show_help():
     table.add_row("/doctor", "Cek kesehatan instalasi (API key, provider, updater)")
     table.add_row("/test", "Jalankan test_hook proyek dan lihat hasilnya")
     table.add_row("/stats", "Statistik token & estimasi biaya per sesi/hari (lokal)")
+    table.add_row("/commit", "AI susun pesan commit dari diff, konfirmasi, lalu push")
+    table.add_row("/pr", "AI susun deskripsi pull request dari diff")
     table.add_row("/init", "Buat REX.md — instruksi proyek yang Rex baca tiap sesi")
     table.add_row("/checkpoints", "Riwayat checkpoint (snapshot otomatis tiap aksi BUILD)")
     table.add_row("/undo", "Kembalikan workspace ke checkpoint sebelumnya")
@@ -488,6 +490,31 @@ def main():
                 console.print(f"[green]REX.md dibuat di {path}[/green] — edit sesuai konvensi proyek Anda.")
             else:
                 console.print(f"[yellow]REX.md sudah ada di {path} — tidak diubah.[/yellow]")
+            continue
+        elif user_input == "/commit":
+            from rex.autogit import generate_commit_message, commit_with_message
+            console.print("[dim]Menganalisis diff…[/dim]")
+            message = generate_commit_message()
+            if not message:
+                console.print("[yellow]Tidak ada perubahan untuk di-commit (atau provider gagal).[/yellow]")
+                continue
+            console.print(f"[bold]Pesan usulan:[/bold] [cyan]{message}[/cyan]")
+            if Confirm.ask("Commit & push dengan pesan ini?", default=False):
+                result = commit_with_message(message, confirm=lambda m: True)
+                console.print(result)
+            else:
+                console.print("[dim]Dibatalkan — pesan tidak dipakai.[/dim]")
+            continue
+        elif user_input == "/pr":
+            from rex.autogit import generate_pr_description
+            console.print("[dim]Menganalisis diff…[/dim]")
+            description = generate_pr_description()
+            if not description:
+                console.print("[yellow]Tidak ada perubahan untuk dideskripsikan (atau provider gagal).[/yellow]")
+                continue
+            console.print("[bold]Deskripsi PR usulan:[/bold]")
+            console.print(description)
+            console.print("[dim]Salin ke GitHub saat membuka pull request.[/dim]")
             continue
         elif user_input == "/stats":
             from rex.stats import format_stats

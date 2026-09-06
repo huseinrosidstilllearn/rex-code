@@ -558,6 +558,33 @@ class RexTUIApp(App):
                     chat.write(f"[green]REX.md created at {path}[/green]")
                 else:
                     chat.write(f"[yellow]REX.md already exists at {path} — untouched.[/yellow]")
+            elif cmd == "/commit":
+                rest = text[7:].strip().lower()
+                pending = getattr(self, "_pending_commit", None)
+                if rest == "yes" and pending:
+                    from rex.autogit import commit_with_message
+                    chat.write(commit_with_message(pending, confirm=lambda m: True))
+                    self._pending_commit = None
+                elif rest == "no":
+                    self._pending_commit = None
+                    chat.write("[dim]Commit proposal cancelled.[/dim]")
+                elif pending and not rest:
+                    chat.write(f"[b]Pending:[/b] {pending}\n[dim]Confirm: /commit yes — cancel: /commit no[/dim]")
+                else:
+                    from rex.autogit import generate_commit_message
+                    chat.write("[dim]Menganalisis diff…[/dim]")
+                    message = generate_commit_message()
+                    if not message:
+                        chat.write("[yellow]Nothing to commit (or provider failed).[/yellow]")
+                    else:
+                        chat.write(f"[b]Proposed:[/b] {message}")
+                        self._pending_commit = message
+                        chat.write("[dim]Confirm: /commit yes — cancel: /commit no[/dim]")
+            elif cmd == "/pr":
+                from rex.autogit import generate_pr_description
+                chat.write("[dim]Menganalisis diff…[/dim]")
+                description = generate_pr_description()
+                chat.write(description or "[yellow]Nothing to describe (or provider failed).[/yellow]")
             elif cmd == "/stats":
                 from rex.stats import format_stats
                 chat.write(format_stats())
