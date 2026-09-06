@@ -8,6 +8,8 @@ from __future__ import annotations
 import sys
 import threading
 from typing import Optional
+
+import rex
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -419,17 +421,7 @@ class CommandPalette(Container):
 
 class RexTUIApp(App):
     CSS = """
-    ApprovalScreen {
-        align: center middle;
-        background: #022C22cc;
-    }
-    #approval-box {
-        width: 70;
-        height: auto;
-        background: $rex-subtle;
-        border: solid yellow;
-        padding: 1 2;
-    }
+    /* Variables must be defined before any rule that uses them */
     $rex-bg:      #022C22;
     $rex-subtle:  #0A3D2E;
     $rex-dim:     #166534;
@@ -449,6 +441,18 @@ class RexTUIApp(App):
     $zinc-200: #E4E4E7;
     $zinc-100: #F4F4F5;
     $zinc-50:  #FAFAFA;
+
+    ApprovalScreen {
+        align: center middle;
+        background: #022C22cc;
+    }
+    #approval-box {
+        width: 70;
+        height: auto;
+        background: $rex-subtle;
+        border: solid yellow;
+        padding: 1 2;
+    }
 
     Screen {
         background: $rex-bg;
