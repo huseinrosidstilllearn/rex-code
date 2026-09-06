@@ -353,6 +353,7 @@ A green run means it is safe to push.
 - [x] **`/cost` + usage meter** — session token/cost accounting moved into `rex/usage.py`: per-model breakdown, `model_costs`-driven estimate, live `1.8k tok · ~$0.0021` status-bar footer, richer `/cost` summary
 - [x] **Token budget guard** — set `token_budget` (total tokens per session, 0 = off): yellow warning at 80%, hard stop at 100% — the next run is refused before any provider call until the budget is raised
 - [x] **Pre/PostToolUse hooks** — `.rex/hooks.json` runs your commands around every tool call: exit 2 on `PreToolUse` denies the call (stdout = reason), `PostToolUse` stdout is fed back to the model; sandboxed, fail-open, covers built-in + plugin + MCP tools
+- [x] **Session resume** — crash recovery auto-resumes the interrupted conversation on next start; `/resume` lists the last 8 sessions and `/resume <n>` switches with full history reloaded; `/new` starts fresh; clean exits are marked so they never trigger recovery
 
 **Next — must-haves for a serious native agent (prioritized)**
 

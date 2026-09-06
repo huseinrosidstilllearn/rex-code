@@ -294,6 +294,8 @@ class CommandPalette(Container):
             ("/theme cyan", "Cyan theme"),
             ("/theme violet", "Violet theme"),
             ("/theme rose", "Rose theme"),
+            ("/resume", "Continue a past session"),
+            ("/new", "Start a fresh session"),
             ("/help", "Show help"),
             ("/exit", "Exit Rex Code"),
         ]
@@ -421,13 +423,26 @@ class RexTUIApp(App):
         yield Footer()
 
     def on_mount(self):
-        pid, _, model = get_active_provider_info()
-        self.session_id = session_store.create(pid, model)["id"]
         status = self.query_one("#status", StatusBar)
         chat = self.query_one("#chat", ChatArea)
         theme = get_active_theme()
         chat.write(f"[b {theme.primary}]Rex Code v{rex.__version__}[/b {theme.primary}]")
         chat.write("[dim]Native TUI -- Autonomous AI Coding & Workflow Agent[/dim]")
+        resumed = None
+        try:
+            resumed = session_store.last_open_session()  # crash recovery candidate
+        except Exception:
+            resumed = None
+        if resumed:
+            self.session_id = resumed["id"]
+            chat.write(
+                f"[yellow]Sesi sebelumnya dilanjutkan:[/yellow] [dim]{(resumed.get('title') or '')[:50]} "
+                f"({resumed.get('message_count', 0)} pesan) — /resume untuk memilih sesi lain, /new untuk mulai baru.[/dim]"
+            )
+        else:
+            pid, _, model = get_active_provider_info()
+            self.session_id = session_store.create(pid, model)["id"]
+        pid, _, model = get_active_provider_info()
         chat.write(f"[dim]Mode: {status.mode} | {pid} | {model}[/dim]")
         chat.write("")
         try:
@@ -448,6 +463,16 @@ class RexTUIApp(App):
         chat.write("[dim]Press Ctrl+P for commands. Type /help for reference.[/dim]")
         chat.write("")
         self._start_update_check()
+
+    def on_unmount(self):
+        """Clean exit marker: closed sessions are never auto-resumed.
+        A crash skips this, so the session stays 'open' for recovery."""
+        if not self.session_id:
+            return
+        try:
+            session_store.close(self.session_id)
+        except Exception:
+            pass
 
     def _start_update_check(self):
         """Background update check - never blocks or crashes startup."""
@@ -591,6 +616,57 @@ class RexTUIApp(App):
                                 chat.write(f"[green]Switched to {pid} ({model}) — applies on next message.[/green]")
                     except Exception as e:
                         chat.write(f"[red]Switch failed: {e}[/red]")
+            elif cmd == "/resume":
+                arg = arguments.strip()
+                sessions = session_store.list()[:8]
+                if not sessions:
+                    chat.write("[yellow]Belum ada sesi tersimpan.[/yellow]")
+                elif not arg.isdigit():
+                    chat.write("[b]Sesi terakhir[/b] [dim]— lanjutkan dengan /resume <n>[/dim]")
+                    for i, meta in enumerate(sessions, 1):
+                        try:
+                            count = len(session_store.load(meta["id"]).get("messages", []))
+                        except Exception:
+                            count = 0
+                        marker = " [green](aktif)[/green]" if meta["id"] == self.session_id else ""
+                        title = (meta.get("title") or "")[:40]
+                        chat.write(f"  [b]{i}[/b]. {title} [dim]· {meta.get('model') or '?'} · {count} pesan · {(meta.get('updated_at') or '')[:16]}{marker}[/dim]")
+                else:
+                    idx = int(arg)
+                    if not (1 <= idx <= len(sessions)):
+                        chat.write(f"[red]Nomor di luar rentang 1-{len(sessions)}.[/red]")
+                    elif sessions[idx - 1]["id"] == self.session_id:
+                        chat.write("[dim]Anda sudah berada di sesi itu.[/dim]")
+                    else:
+                        chosen = sessions[idx - 1]
+                        try:
+                            self.agent = RexAgent(chosen["id"])
+                        except Exception as exc:
+                            chat.write(f"[red]Gagal memuat sesi: {exc}[/red]")
+                        else:
+                            self.session_id = chosen["id"]
+                            try:
+                                count = len(session_store.load(chosen["id"]).get("messages", []))
+                            except Exception:
+                                count = 0
+                            chat.write(f"[green]Lanjut sesi:[/green] {(chosen.get('title') or '')[:50]} [dim]({count} pesan dimuat)[/dim]")
+            elif cmd == "/new":
+                if self.session_id:
+                    try:
+                        session_store.close(self.session_id)
+                    except Exception:
+                        pass
+                pid, _, model = get_active_provider_info()
+                self.session_id = session_store.create(pid, model)["id"]
+                try:
+                    self.agent = RexAgent(self.session_id)
+                    chat.write(f"[green]Sesi baru dimulai[/green] [dim]({model})[/dim]")
+                except Exception as exc:
+                    chat.write(f"[red]Provider gagal: {exc}[/red]")
+                try:
+                    self.query_one("#status", StatusBar).update_usage("")
+                except Exception:
+                    pass
             elif cmd == "/cost":
                 if self.agent:
                     self.agent.usage.refresh_config()
@@ -708,6 +784,8 @@ class RexTUIApp(App):
         chat.write(f"  [b]/build[/b]     Build mode (autonomous execution)")
         chat.write(f"  [b]/settings[/b]  Toggle approval mode (confirm every BUILD action)")
         chat.write(f"  [b]/cost[/b]      Token usage for this session")
+        chat.write(f"  [b]/resume[/b]    Continue a past session (/resume <n> to pick)")
+        chat.write(f"  [b]/new[/b]       Start a fresh session (old one is kept)")
         chat.write(f"  [b]/init[/b]      Create REX.md project instructions")
         chat.write(f"  [b]/checkpoints[/b] List automatic snapshots")
         chat.write(f"  [b]/todos[/b]     Show the agent todo board for this session")

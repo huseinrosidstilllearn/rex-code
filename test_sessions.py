@@ -55,7 +55,63 @@ def main():
         except (FileNotFoundError, ValueError):
             pass
 
-    print("Session checks 10/10 PASS")
+    # ── Session resume + crash recovery ───────────────────────────────
+    with tempfile.TemporaryDirectory() as temp_dir:
+        store = SessionStore(Path(temp_dir))
+
+        # Fresh session is born open
+        s1 = store.create("gemini", "m1")
+        assert s1["status"] == "open"
+        assert store.last_open_session() is None  # no messages yet -> not a candidate
+
+        store.append(s1["id"], {"role": "user", "content": "pekerjaan pertama"})
+        assert store.last_open_session()["id"] == s1["id"]
+
+        # A cleanly closed session is never a resume candidate
+        store.close(s1["id"])
+        assert store.load(s1["id"])["status"] == "closed"
+        assert store.last_open_session() is None
+        store.close(s1["id"])  # idempotent
+        assert store.load(s1["id"])["status"] == "closed"
+
+        # Newest open session wins; message_count reported
+        s2 = store.create("gemini", "m2")
+        s3 = store.create("gemini", "m3")
+        store.append(s2["id"], {"role": "user", "content": "sesi dua"})
+        store.append(s2["id"], {"role": "assistant", "content": "jawab dua"})
+        store.append(s3["id"], {"role": "user", "content": "sesi tiga"})
+        candidate = store.last_open_session()
+        assert candidate["id"] == s3["id"], "newest open session must win"
+        assert candidate["message_count"] == 1
+        assert store.list()[0]["status"] == "open"
+
+        # Missing status (old-format files) never qualifies
+        import json
+        path = store._path(s3["id"])
+        data = json.loads(path.read_text(encoding="utf-8"))
+        del data["status"]
+        path.write_text(json.dumps(data), encoding="utf-8")
+        assert store.last_open_session()["id"] == s2["id"]
+
+        # Resume flow: a fresh agent pointed at the old session id reloads history
+        provider = FakeProvider()
+        with patch("rex.core.session_store", store), patch(
+            "rex.core.get_llm_provider_with_fallback", return_value=(provider, [None])
+        ):
+            from rex.core import RexAgent
+            agent = RexAgent(session_id=s2["id"])
+            assert agent.messages[-1]["content"] == "jawab dua"
+            agent.run("lanjut di sini")
+        assert provider.received[0]["content"] == "sesi dua", "resumed context must reach the provider"
+        assert provider.received[-1]["content"] == "lanjut di sini"
+
+        try:
+            store.close("tidak-ada")
+            raise AssertionError("close pada id asing harus gagal")
+        except (FileNotFoundError, ValueError):
+            pass
+
+    print("Session checks 24/24 PASS")
 
 
 if __name__ == "__main__":

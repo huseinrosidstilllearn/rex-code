@@ -7,7 +7,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from rex.config import SESSIONS_DIR
 
@@ -65,6 +65,7 @@ class SessionStore:
             "updated_at": now,
             "provider": str(provider),
             "model": str(model),
+            "status": "open",
             "messages": [],
         }
         with self._lock:
@@ -87,7 +88,7 @@ class SessionStore:
                     with open(path, "r", encoding="utf-8") as file:
                         data = json.load(file)
                     sessions.append({key: data.get(key) for key in (
-                        "id", "title", "created_at", "updated_at", "provider", "model", "usage"
+                        "id", "title", "created_at", "updated_at", "provider", "model", "usage", "status"
                     )})
                 except (OSError, json.JSONDecodeError):
                     continue
@@ -137,6 +138,39 @@ class SessionStore:
             if not path.exists():
                 raise FileNotFoundError(session_id)
             path.unlink()
+
+    def close(self, session_id: str) -> None:
+        """Mark a session cleanly ended. Crash recovery only offers sessions
+        that are still ``"open"`` — a clean exit must land here."""
+        with self._lock:
+            data = self.load(session_id)
+            if data.get("status") != "closed":
+                data["status"] = "closed"
+                data["updated_at"] = self._now()
+                self._write(data)
+
+    def last_open_session(self) -> Optional[Dict[str, Any]]:
+        """
+        Newest session still marked ``"open"`` with at least one message —
+        the auto-resume candidate after a crash. Sessions written before
+        this field existed never qualify. Returns None when there is none.
+        """
+        with self._lock:
+            for meta in self.list():
+                try:
+                    data = self.load(meta["id"])
+                except Exception:
+                    continue
+                if data.get("status") == "open" and data.get("messages"):
+                    return {
+                        "id": data["id"],
+                        "title": data.get("title"),
+                        "provider": data.get("provider"),
+                        "model": data.get("model"),
+                        "updated_at": data.get("updated_at"),
+                        "message_count": len(data["messages"]),
+                    }
+        return None
 
 
 session_store = SessionStore()
