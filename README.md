@@ -364,6 +364,7 @@ A green run means it is safe to push.
 - [x] **`/export md|html`** — write the current session to a portable file: clean Markdown or standalone HTML (inline CSS, escaped content), tool turns fenced, usage + cost footer from the same `model_costs` convention; exports keep the session's secret redaction
 - [x] **Layered project rules** — `.rex/rules/*.md` in the project root applies everywhere; `.rex/rules/*.md` inside a subfolder applies when working there (labeled in the prompt); capped per file and total, toggleable via `context.rules`
 - [x] **Skills on-demand** — drop `<name>/SKILL.md` (front-matter + instructions) into `.rex/skills/`: a compact listing joins the system prompt, the model loads the full body on demand via the `load_skill` tool, or you run it directly with `/skill <name> [args]` (`/skills` to list)
+- [x] **Parallel delegates via git worktrees** — `delegate_parallel` runs up to 3 sub-agents concurrently, each in its own isolated worktree as a headless Rex child (writes only touch the copy); the worktree is removed afterwards and its diff is returned for review — applying it goes through `apply_patch`'s approval gate + checkpoint
 
 **Next — must-haves for a serious native agent (prioritized)**
 

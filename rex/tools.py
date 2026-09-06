@@ -900,6 +900,28 @@ TOOL_DEFINITIONS = [
         }
     },
     {
+        "name": "delegate_parallel",
+        "description": "Menjalankan beberapa sub-agent spesialis secara paralel, masing-masing di worktree git terpisah (tulisannya terisolasi). Butuh repo git; patch hasilnya direview lalu diterapkan via apply_patch.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "tasks": {
+                    "type": "array",
+                    "description": "Maksimal 3 tugas",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "agent": {"type": "string", "description": "brachio|raptor|trike|ptero|dilo"},
+                            "task": {"type": "string", "description": "Tugas untuk sub-agent"}
+                        },
+                        "required": ["agent", "task"]
+                    }
+                }
+            },
+            "required": ["tasks"]
+        }
+    },
+    {
         "name": "git_status",
         "description": "Melihat ringkasan status git (branch, staged/unstaged/untracked). Aktif di PLAN & BUILD.",
         "parameters": {"type": "object", "properties": {}, "required": []}
@@ -1025,6 +1047,25 @@ def load_skill(name: str) -> str:
     return f"Skill '{skill['name']}' — {skill['description']}\n\n{skill['body']}"
 
 
+def delegate_parallel(tasks: List[dict]) -> str:
+    """Jalankan beberapa sub-agent paralel dalam worktree terpisah (butuh git)."""
+    from rex.subagents import run_worktree_delegates
+    if not isinstance(tasks, list) or not tasks:
+        return "Error: tasks harus list berisi {agent, task}."
+    results = run_worktree_delegates(tasks)
+    lines = []
+    for item in results:
+        lines.append(f"━━ {item.get('agent', '?')} " + "─" * 40)
+        if item.get("error"):
+            lines.append(f"[GAGAL] {item['error']}")
+        if item.get("response"):
+            lines.append(f"Hasil: {item['response']}")
+        if item.get("diff"):
+            lines.append(f"Patch tersedia ({len(item['diff'])} chars) — tinjau lalu terapkan dengan apply_patch bila sesuai.")
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
 TOOL_REGISTRY = {
     "read_file": read_file,
     "write_file": write_file,
@@ -1049,13 +1090,5 @@ TOOL_REGISTRY = {
     "web_search": web_search,
     "web_fetch": web_fetch,
     "load_skill": load_skill,
+    "delegate_parallel": delegate_parallel,
 }
-
-
-def _load_skill_entry(name: str) -> str:
-    """Muat isi skill on-demand dari .rex/skills/<name>/SKILL.md (PLAN & BUILD)."""
-    from rex.skills import get_skill
-    skill = get_skill(str(name or "").strip())
-    if skill is None:
-        return f"Error: skill '{name}' tidak ditemukan. Lihat daftar skill di system prompt (section Skills)."
-    return f"Skill '{skill['name']}' — {skill['description']}\n\n{skill['body']}"

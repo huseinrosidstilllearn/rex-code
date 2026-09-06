@@ -43,6 +43,74 @@ def _run_git(args: List[str], cwd: Path, timeout: int = 20) -> subprocess.Comple
     )
 
 
+# ── Git worktrees: isolated copies for parallel sub-agents ───────────
+
+WORKTREE_DIRNAME = "worktrees"
+WORKTREE_BRANCH_PREFIX = "rex-wt-"
+
+
+def is_git_repo(cwd: Optional[Path] = None) -> bool:
+    try:
+        result = _run_git(["rev-parse", "--is-inside-work-tree"], Path(cwd or Path.cwd()))
+        return result.returncode == 0 and result.stdout.strip() == "true"
+    except Exception:
+        return False
+
+
+def _worktree_path(task_id: str, cwd: Optional[Path] = None) -> Path:
+    root = Path(cwd or Path.cwd())
+    return root / ".rex" / WORKTREE_DIRNAME / task_id
+
+
+def create_worktree(task_id: str, cwd: Optional[Path] = None) -> Optional[Path]:
+    """
+    Create an isolated worktree under ``<repo>/.rex/worktrees/<task_id>``
+    on a dedicated branch. Returns the worktree path, or None on failure
+    (not a repo, branch collision, ...). Never raises.
+    """
+    task_id = "".join(ch for ch in str(task_id) if ch.isalnum() or ch == "-")[:40] or "task"
+    try:
+        root = Path(cwd or Path.cwd())
+        if not is_git_repo(root):
+            return None
+        path = _worktree_path(task_id, root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        result = _run_git(["worktree", "add", "-b", f"{WORKTREE_BRANCH_PREFIX}{task_id}", str(path)], root)
+        if result.returncode != 0:
+            log.warning("worktree add failed: %s", result.stderr.strip()[:200])
+            return None
+        return path
+    except Exception as exc:
+        log.warning("worktree add error: %s", exc)
+        return None
+
+
+def worktree_diff(task_id: str, cwd: Optional[Path] = None) -> str:
+    """Diff of the worktree (committed + working tree) as a patch string."""
+    try:
+        path = _worktree_path(task_id, Path(cwd or Path.cwd()))
+        result = _run_git(["diff", "HEAD", "--no-color"], path, timeout=30)
+        return result.stdout if result.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def remove_worktree(task_id: str, cwd: Optional[Path] = None) -> bool:
+    """Remove the worktree and its branch. Never raises; True on success."""
+    task_id = "".join(ch for ch in str(task_id) if ch.isalnum() or ch == "-")[:40] or "task"
+    try:
+        root = Path(cwd or Path.cwd())
+        path = _worktree_path(task_id, root)
+        if not path.exists():
+            return False
+        _run_git(["worktree", "remove", "--force", str(path)], root, timeout=60)
+        _run_git(["branch", "-D", f"{WORKTREE_BRANCH_PREFIX}{task_id}"], root)
+        return not path.exists()
+    except Exception as exc:
+        log.warning("worktree remove error: %s", exc)
+        return False
+
+
 def collect_git_context(cwd: Optional[Path] = None, max_chars: int = MAX_DIFF_CHARS) -> Optional[str]:
     """
     Build the LLM context: staged+unstaged diff vs HEAD, branch, recent
