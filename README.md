@@ -357,6 +357,7 @@ A green run means it is safe to push.
 - [x] **Session resume** — crash recovery auto-resumes the interrupted conversation on next start; `/resume` lists the last 8 sessions and `/resume <n>` switches with full history reloaded; `/new` starts fresh; clean exits are marked so they never trigger recovery
 - [x] **`/rewind` timeline** — numbered checkpoint timeline with one-command restore: `/rewind <n>` rolls the workspace back N checkpoints; uncommitted work is auto-saved and `/redo` reverses the rewind
 - [x] **Background shell tasks** — `run_command_bg` starts long-running commands (dev servers, builds) without blocking the conversation; `task_output` tails output (optional wait up to 30s) and `task_kill` stops them; same sandbox, approval gate and checkpoint as `run_command`, max 8 concurrent
+- [x] **`/status` report** — one aggregated health view across every subsystem: version, provider + API keys, fallback chain, MCP servers, plugins, hooks, scheduler jobs, sessions, checkpoints, updater, approval and token budget — config-level only, instant, side-effect free
 
 **Next — must-haves for a serious native agent (prioritized)**
 

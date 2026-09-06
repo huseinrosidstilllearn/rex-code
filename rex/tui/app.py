@@ -297,6 +297,7 @@ class CommandPalette(Container):
             ("/resume", "Continue a past session"),
             ("/new", "Start a fresh session"),
             ("/rewind", "Restore an older checkpoint"),
+            ("/status", "Full subsystem health report"),
             ("/help", "Show help"),
             ("/exit", "Exit Rex Code"),
         ]
@@ -724,6 +725,9 @@ class RexTUIApp(App):
             elif cmd == "/doctor":
                 from rex.review import format_doctor
                 chat.write(format_doctor())
+            elif cmd == "/status":
+                from rex.status import format_status
+                chat.write(format_status())
             elif cmd == "/test":
                 from rex.review import run_tests_hook
                 result = run_tests_hook()
