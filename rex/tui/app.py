@@ -12,11 +12,13 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Container, Horizontal
+from textual.screen import ModalScreen
 from textual.widgets import Header, Footer, RichLog, Input, Label, ListView, ListItem
 from textual.reactive import reactive
 from textual.message import Message
 
 from rex.config import load_config, get_active_mode, set_active_mode, get_active_provider_info
+from rex.approval import set_provider, reset_session_allows
 from rex.core import RexAgent, StepEvent
 from rex.sessions import session_store
 from rex.subagents import get_subagent
@@ -27,6 +29,51 @@ class PromptSubmitted(Message):
     def __init__(self, text: str) -> None:
         self.text = text
         super().__init__()
+
+
+class ApprovalDecided(Message):
+    """Raised by ApprovalScreen when the user answers a confirmation."""
+
+    def __init__(self, approved: bool, remember: bool) -> None:
+        self.approved = approved
+        self.remember = remember
+        super().__init__()
+
+
+class ApprovalScreen(ModalScreen):
+    """Modal y/n confirmation for a destructive BUILD action."""
+
+    BINDINGS = [
+        Binding("y", "approve", "Setujui", show=True),
+        Binding("n", "deny", "Tolak", show=True, key_display="n/Esc"),
+        Binding("a", "approve_always", "Selalu (sesi ini)", show=True),
+        Binding("escape", "deny", "", show=False),
+    ]
+
+    def __init__(self, action: str, summary: str) -> None:
+        super().__init__()
+        self.action = action
+        self.summary = summary
+
+    def compose(self) -> ComposeResult:
+        with Container(id="approval-box"):
+            yield Label(f"[b yellow]Approval: {self.action}[/b yellow]")
+            yield Label(self.summary)
+            yield Label("[dim]y = setujui · n = tolak · a = selalu (sesi ini)[/dim]")
+
+    def action_approve(self) -> None:
+        self.dismiss((True, False))
+
+    def action_deny(self) -> None:
+        self.dismiss((False, False))
+
+    def action_approve_always(self) -> None:
+        pattern = self.summary.lower()
+        if self.action == "run_command":
+            body = pattern.split(":", 1)[-1].strip()
+            head = body.split(" ")[0] if body else "*"
+            pattern = f"jalankan perintah: {head} *"
+        self.dismiss((True, pattern))
 
 
 class CommandPaletteCustom(Message):
@@ -251,6 +298,17 @@ class CommandPalette(Container):
 
 class RexTUIApp(App):
     CSS = """
+    ApprovalScreen {
+        align: center middle;
+        background: #022C22cc;
+    }
+    #approval-box {
+        width: 70;
+        height: auto;
+        background: $rex-subtle;
+        border: solid yellow;
+        padding: 1 2;
+    }
     $rex-bg:      #022C22;
     $rex-subtle:  #0A3D2E;
     $rex-dim:     #166534;
@@ -306,6 +364,23 @@ class RexTUIApp(App):
         self.agent = None
         self.session_id = None
         self._running = False
+        set_provider(self._approval_provider)
+
+    def _approval_provider(self, action: str, summary: str):
+        """Runs on the agent thread: push the modal, block on the answer."""
+        result = {}
+        done = threading.Event()
+
+        def ask():
+            def callback(decision):
+                result["value"] = decision
+                done.set()
+            self.push_screen(ApprovalScreen(action, summary), callback)
+
+        self.call_from_thread(ask)
+        done.wait(timeout=300)  # don't hang forever if the UI is closed
+        decision = result.get("value") or (False, False)
+        return decision
 
     def compose(self):
         yield Header()
@@ -400,6 +475,14 @@ class RexTUIApp(App):
                 set_active_mode("build")
                 self.query_one("#status", StatusBar).mode = "BUILD"
                 chat.write("[dim]Switched to BUILD mode (autonomous execution)[/dim]")
+            elif cmd == "/settings":
+                from rex.config import save_config, normalize_config
+                cfg = normalize_config(load_config())
+                appr = cfg.setdefault("approval", {})
+                appr["enabled"] = not bool(appr.get("enabled", False))
+                save_config(cfg)
+                state = "AKTIF" if appr["enabled"] else "MATI"
+                chat.write(f"[dim]Approval mode {state} — aksi BUILD sekarang {'perlu konfirmasi' if appr['enabled'] else 'langsung dieksekusi'}[/dim]")
             elif cmd == "/theme":
                 parts = text.split()
                 if len(parts) > 1:
@@ -445,6 +528,7 @@ class RexTUIApp(App):
         chat.write(f"[b {theme.primary}]Rex Code -- Commands[/b {theme.primary}]")
         chat.write(f"  [b]/plan[/b]      Plan mode (read-only analysis)")
         chat.write(f"  [b]/build[/b]     Build mode (autonomous execution)")
+        chat.write(f"  [b]/settings[/b]  Toggle approval mode (confirm every BUILD action)")
         chat.write(f"  [b]/theme <n>[/b] Change theme: rex mono amber cyan violet rose custom")
         chat.write(f"  [b]/help[/b]      Show this help")
         chat.write(f"  [b]/exit[/b]      Exit")

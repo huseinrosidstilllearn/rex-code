@@ -11,6 +11,7 @@ import unicodedata
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from rex.config import WORKSPACE_DIR, WORKFLOWS_DIR, get_active_mode, load_config
+from rex.approval import request_approval, summarize_action
 from rex.shell import build_command_argv
 
 SENSITIVE_FILENAMES = {".env", "config.json", "credentials.json", "credential.json", "secrets.json"}
@@ -66,6 +67,8 @@ def write_file(path: str, content: str) -> str:
     target = _target(path)
     if _is_sensitive(target):
         return "DIBLOKIR KEAMANAN: path di luar workspace atau file sensitif."
+    if not request_approval("write_file", summarize_action("write_file", {"path": path})):
+        return f"DITOLAK PENGGUNA: penulisan '{path}' tidak disetujui. Jangan coba lagi tanpa instruksi baru."
 
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -86,6 +89,8 @@ def edit_file(path: str, target_content: str, replacement_content: str) -> str:
         return "DIBLOKIR KEAMANAN: path di luar workspace atau file sensitif."
     if not target.exists():
         return f"Error: File '{path}' tidak ditemukan."
+    if not request_approval("edit_file", summarize_action("edit_file", {"path": path})):
+        return f"DITOLAK PENGGUNA: edit '{path}' tidak disetujui. Jangan coba lagi tanpa instruksi baru."
     try:
         with open(target, "r", encoding="utf-8") as f:
             data = f.read()
@@ -176,6 +181,8 @@ def delete_file(path: str) -> str:
         return "DIBLOKIR KEAMANAN: path di luar workspace atau file sensitif."
     if not target.exists() or not target.is_file():
         return f"Error: File '{path}' tidak ditemukan."
+    if not request_approval("delete_file", summarize_action("delete_file", {"path": path})):
+        return f"DITOLAK PENGGUNA: penghapusan '{path}' tidak disetujui. Jangan coba lagi tanpa instruksi baru."
     try:
         target.unlink()
         return f"Berhasil menghapus file: {target.relative_to(WORKSPACE_DIR.parent)}"
@@ -245,6 +252,9 @@ def run_command(command: str) -> str:
     blocked_reason = _blocked_reason(command)
     if blocked_reason:
         return f"DIBLOKIR KEAMANAN: {blocked_reason}."
+
+    if not request_approval("run_command", summarize_action("run_command", {"command": command})):
+        return "DITOLAK PENGGUNA: eksekusi perintah ini tidak disetujui. Jangan coba lagi tanpa instruksi baru."
 
     cfg = load_config()
     timeout = max(1, int(cfg.get("terminal_timeout_sec", 45)))
@@ -329,6 +339,8 @@ def git_publish(message: str) -> str:
     cfg = load_config()
     if not cfg.get("git_publish_enabled", True):
         return "DIBLOKIR: git_publish_enabled=false di config.json."
+    if not request_approval("git_publish", summarize_action("git_publish", {"message": message})):
+        return "DITOLAK PENGGUNA: publish tidak disetujui. Jangan coba lagi tanpa instruksi baru."
 
     repo_root = Path(__file__).resolve().parent.parent
     push_timeout = max(10, int(cfg.get("git_publish_timeout_sec", 120)))

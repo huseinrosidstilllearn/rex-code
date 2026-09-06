@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import rex
 from rex import __version__
+from rex.approval import request_approval, reset_session_allows, set_provider, summarize_action
 
 from rich.console import Console
 from rich.panel import Panel
@@ -162,8 +163,10 @@ def handle_settings():
         table.add_row("updates.enabled", str(upd.get("enabled", True)))
         table.add_row("updates.auto_download", str(upd.get("auto_download", True)))
         table.add_row("updates.auto_install", str(upd.get("auto_install", True)))
+        appr = cfg.get("approval", {})
+        table.add_row("approval.enabled", str(appr.get("enabled", False)))
         console.print(table)
-        choice = Prompt.ask("Ubah setting (mode / anti-slop / stream / voice / max-steps / updates / done)", choices=["mode", "anti-slop", "stream", "voice", "max-steps", "updates", "done"], default="done")
+        choice = Prompt.ask("Ubah setting (mode / anti-slop / stream / voice / max-steps / updates / approval / done)", choices=["mode", "anti-slop", "stream", "voice", "max-steps", "updates", "approval", "done"], default="done")
         if choice == "done":
             break
         elif choice == "mode":
@@ -191,6 +194,10 @@ def handle_settings():
             key = {"enabled": "enabled", "auto-download": "auto_download", "auto-install": "auto_install"}[which]
             v = Prompt.ask(f"{which}", choices=["true", "false"], default=str(upd.get(key, True)).lower())
             upd[key] = v == "true"
+        elif choice == "approval":
+            appr = cfg.setdefault("approval", {})
+            v = Prompt.ask("Perlu konfirmasi untuk tiap aksi BUILD? (disarankan aktif)", choices=["true", "false"], default=str(appr.get("enabled", False)).lower())
+            appr["enabled"] = v == "true"
     save_config(cfg)
     console.print(f"[bold green]âœ“ Settings disimpan.[/bold green]")
 
@@ -338,6 +345,26 @@ def handle_scheduler():
             console.print(f"[red]Gagal trigger job: {exc}[/red]")
 
 
+def _console_approval_provider(action: str, summary: str):
+    """Ask the user in the console. Returns (bool, remember_glob) tuples are
+    handled by the approval service; here we return a plain bool plus the
+    session 'always' pattern when the user chooses always."""
+    from rich.prompt import Confirm
+
+    console.print(Panel(summary, title=f"[bold yellow]Approval: {action}[/bold yellow]", border_style="yellow"))
+    if Confirm.ask("  Setujui aksi ini?", default=True):
+        if Confirm.ask("  Ingat untuk aksi serupa di sesi ini? (always)", default=False):
+            pattern = summary.lower()
+            if action == "run_command":
+                # remember just the executable prefix: 'jalankan perintah: pip install ...' -> glob
+                body = pattern.split(":", 1)[-1].strip()
+                head = body.split(" ")[0] if body else "*"
+                pattern = f"jalankan perintah: {head} *"
+            return (True, pattern)
+        return True
+    return False
+
+
 def check_updates_background():
     """Run the update check on a thread; returns (thread, notice_list)."""
     import threading
@@ -368,6 +395,8 @@ def main():
     pid, _, model = get_active_provider_info()
     current_session_id = session_store.create(pid, model)["id"]
     agent = RexAgent(current_session_id)
+    set_provider(_console_approval_provider)
+    reset_session_allows()
 
     update_thread, update_notices = check_updates_background()
     if update_thread is not None:

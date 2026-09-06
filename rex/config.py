@@ -112,6 +112,11 @@ DEFAULT_CONFIG = {
         "auto_install": True,
         "download_dir": None
     },
+    "approval": {
+        "enabled": False,
+        "actions": [],
+        "allow": {}
+    },
     "scheduler": {
         "enabled": True,
         "jobs": [
@@ -331,6 +336,25 @@ def normalize_config(cfg: dict) -> dict:
         download_dir = None
     updates["download_dir"] = download_dir
     cfg["updates"] = updates
+
+    approval_defaults = DEFAULT_CONFIG["approval"]
+    approval = cfg.get("approval")
+    if not isinstance(approval, dict):
+        approval = {}
+    approval = {**approval_defaults, **approval}
+    approval["enabled"] = bool(approval.get("enabled", False))
+    actions = approval.get("actions")
+    if not isinstance(actions, list):
+        actions = []
+    approval["actions"] = sorted({item.strip() for item in actions if isinstance(item, str) and item.strip()})
+    allow = approval.get("allow")
+    if not isinstance(allow, dict):
+        allow = {}
+    approval["allow"] = {
+        str(key): [str(p) for p in (value if isinstance(value, list) else [value]) if isinstance(p, str)]
+        for key, value in allow.items()
+    }
+    cfg["approval"] = approval
     return cfg
 
 def get_active_mode() -> str:

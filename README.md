@@ -97,6 +97,8 @@ The TUI adds a **Ctrl+P command palette** and `/theme` (rex, mono, amber, cyan, 
 
 Plugins extend this list automatically — see [`plugins/current_time.py`](plugins/current_time.py) as the template.
 
+In BUILD mode, the five destructive tools (`write_file`, `edit_file`, `delete_file`, `run_command`, `git_publish`) can require per-action confirmation — enable it in `/settings` → `approval`, or in `config.json`. Answer **always** to store a session allowlist pattern (e.g. `git status` style commands stop prompting).
+
 ---
 
 ## 🔄 Auto-Update
@@ -177,6 +179,7 @@ sensitive files · secrets redacted before persistence · cooperative abort betw
 | Secret leaks in git history | `git_publish` scans staged diff (`ghp_*`, `AIza*`, `sk-*`, private keys…) |
 | Secrets in child processes | stripped from environment before spawn |
 | Secrets in logs/sessions | redaction on write |
+| Blind autonomous writes/runs | per-action approval in BUILD mode (optional, session allowlist, fail-open) |
 
 ---
 
@@ -210,10 +213,10 @@ row contract, history cap, minute dedup). A green run means it is safe to push.
 - [x] Webhook review engine (signature → review → comment)
 - [x] Windows installer + cross-platform release workflow
 - [x] Auto-update: daily check → download → install (opt-out per step)
+- [x] Per-action approval in BUILD mode — confirm each write/run (session allowlist, fail-open when off)
 
 **Next — must-haves for a serious native agent (prioritized)**
 
-- [ ] **Per-action approval in BUILD mode** — confirm each write/run (with allowlist) instead of trusting blindly
 - [ ] **Checkpoints & `/undo`** — git snapshot per agent step, instant rollback of bad edits
 - [ ] **`/init` + `REX.md` project memory** — per-project + global custom instructions the agent always reads
 - [ ] **Context compaction** — auto-summarize long sessions instead of truncating history

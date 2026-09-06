@@ -19,6 +19,7 @@ CHECKS = [
     "test_webhooks.py",
     "test_updates.py",
     "test_scheduler.py",
+    "test_approval.py",
 ]
 
 
