@@ -361,6 +361,23 @@ def check_for_update(settings: Dict, current_version: Optional[str] = None) -> O
     return newer or None
 
 
+def take_pending_changelog() -> str:
+    """
+    Return and clear the changelog stashed by the previous update
+    (shown by the UI after the user has restarted into the new version).
+    Empty string when there is none. Never raises.
+    """
+    try:
+        path = LOGS_DIR / "pending_changelog.txt"
+        if not path.is_file():
+            return ""
+        text = path.read_text(encoding="utf-8", errors="replace").strip()
+        path.unlink(missing_ok=True)
+        return text
+    except Exception:
+        return ""
+
+
 def maybe_update(
     settings: Dict,
     on_notice: Callable[[str], None],
@@ -408,6 +425,16 @@ def maybe_update(
         )
         if not installer:
             return
+
+        # Stash the release notes for post-update changelog display (written
+        # once the file is on disk, before the checksum gate decides install).
+        try:
+            notes = str(release.get("body") or "").strip()
+            if notes:
+                LOGS_DIR.mkdir(parents=True, exist_ok=True)
+                (LOGS_DIR / "pending_changelog.txt").write_text(notes, encoding="utf-8")
+        except Exception:
+            pass
 
         # Integrity gate: verify SHA256 before anything may execute the file.
         sums = download_checksums(release, download_dir)

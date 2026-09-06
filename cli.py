@@ -437,6 +437,14 @@ def main():
                 sys.exit(0)
             console.print(f"[dim]{text}[/dim]")
 
+    # Post-update changelog: shown once after restarting into a new version.
+    from rex.updates import take_pending_changelog
+    pending = take_pending_changelog()
+    if pending:
+        console.print("[bold green]Yang baru setelah pembaruan:[/bold green]")
+        for line in pending.splitlines()[:14]:
+            console.print(f"[dim]  {line}[/dim]")
+
     while True:
         mode = get_active_mode().upper()
         mode_style = "bold blue" if mode == "PLAN" else "bold green"

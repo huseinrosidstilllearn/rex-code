@@ -48,6 +48,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; \
     GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "addtopath"; Description: "Add Rex Code to the system PATH (call 'rex' from any terminal)"; \
     GroupDescription: "Additional Options:"; Flags: unchecked
+Name: "explorermenu"; Description: "Add 'Open Rex Code here' to the folder right-click menu"; \
+    GroupDescription: "Additional Options:"; Flags: unchecked
 Name: "keepdata"; Description: "Keep user data (config, sessions, logs) when uninstalling"; \
     GroupDescription: "Additional Options:"; Flags: checkedonce
 
@@ -56,11 +58,27 @@ Name: "keepdata"; Description: "Keep user data (config, sessions, logs) when uni
 Source: "..\..\dist\RexCode\*"; DestDir: "{app}"; \
     Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\assets\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\assets\rex-here.cmd"; DestDir: "{app}"; Flags: ignoreversion; Tasks: explorermenu
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Comment: "Launch {#AppName}"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Comment: "Launch {#AppName}"; Tasks: desktopicon
+
+; 'Open Rex Code here' — directory background + right-click on a folder
+[Registry]
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\OpenRexCode"; \
+    ValueType: string; ValueName: "MUIVerb"; ValueData: "Open Rex Code here"; Tasks: explorermenu
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\OpenRexCode"; \
+    ValueType: string; ValueName: "Icon"; ValueData: "{app}\icon.ico"; Tasks: explorermenu
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\OpenRexCode\command"; \
+    ValueType: string; ValueName: ""; ValueData: "\"{app}\rex-here.cmd\" \"%1\""; Tasks: explorermenu
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\OpenRexCode"; \
+    ValueType: string; ValueName: "MUIVerb"; ValueData: "Open Rex Code here"; Tasks: explorermenu
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\OpenRexCode"; \
+    ValueType: string; ValueName: "Icon"; ValueData: "{app}\icon.ico"; Tasks: explorermenu
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\OpenRexCode\command"; \
+    ValueType: string; ValueName: ""; ValueData: "\"{app}\rex-here.cmd\" \"%V\""; Tasks: explorermenu
 
 [Registry]
 ; Append {app} to the system PATH (deduplicated via NeedsAddPath)
@@ -71,6 +89,10 @@ Root: HKLM; Subkey: "SYSTEM\CurrentControlSet\Control\Session Manager\Environmen
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; \
     Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+; Remove the Explorer menu entries when the task was selected (HKCU keys)
+Filename: "{cmd}"; Parameters: "/C reg delete \"HKCU\Software\Classes\Directory\shell\OpenRexCode\" /f >nul 2>&1 & reg delete \"HKCU\Software\Classes\Directory\Background\shell\OpenRexCode\" /f >nul 2>&1"; Flags: runhidden; Tasks: explorermenu
 
 [UninstallDelete]
 ; User data lives in %LOCALAPPDATA%\RexCode. It survives uninstall while

@@ -447,6 +447,22 @@ class RexTUIApp(App):
 
         threading.Thread(target=lambda: maybe_update(settings, notice, ready_to_install), daemon=True).start()
 
+        # Post-update changelog: shown once after restarting into a new version.
+        def show_changelog():
+            from rex.updates import take_pending_changelog
+            text = take_pending_changelog()
+            if text:
+                first_lines = "\n".join(text.splitlines()[:8])
+                def write_it():
+                    try:
+                        self.query_one("#chat", ChatArea).write(
+                            f"[b]Yang baru setelah pembaruan:[/b]\n[dim]{first_lines}[/dim]"
+                        )
+                    except Exception:
+                        pass
+                self.call_from_thread(write_it)
+        threading.Thread(target=show_changelog, daemon=True).start()
+
     def refresh_theme(self):
         self.query_one("#status", StatusBar).refresh_accent()
 

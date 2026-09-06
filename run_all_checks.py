@@ -34,6 +34,7 @@ CHECKS = [
     "test_vision.py",
     "test_ecosystem.py",
     "test_codeindex.py",
+    "test_phase9.py",
 ]
 
 

@@ -17,9 +17,17 @@ from dotenv import load_dotenv
 def _get_data_dir() -> Path:
     """
     Return the persistent data directory.
+    - REX_WORKSPACE env var set to an existing directory: project-scoped mode
+      (used by the "Open Rex Code here" Explorer menu — config, sessions and
+      logs then live inside that project folder)
     - Source mode: project root (repo)
     - Frozen (exe): %LOCALAPPDATA%\\RexCode (Windows) or ~/.local/share/rexcode (Unix)
     """
+    override = os.getenv("REX_WORKSPACE", "").strip()
+    if override:
+        candidate = Path(override)
+        if candidate.is_dir():
+            return candidate
     if getattr(sys, "frozen", False):
         # Running as PyInstaller bundle
         if sys.platform == "win32":
