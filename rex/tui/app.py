@@ -840,6 +840,9 @@ class RexTUIApp(App):
                     prompt = skill["body"] + (f"\n\nArgumen: {extra}" if extra else "")
                     chat.add_user_message(prompt)
                     self.run_agent(prompt)
+            elif cmd == "/plugins":
+                from rex.plugins import format_plugins_table
+                chat.write(format_plugins_table())
             elif cmd == "/export":
                 arg = (arguments or "md").strip().lower().lstrip(".") or "md"
                 if not self.session_id:

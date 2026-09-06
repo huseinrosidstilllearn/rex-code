@@ -114,7 +114,8 @@ DEFAULT_CONFIG = {
     },
     "plugins": {
         "enabled": True,
-        "list": []
+        "list": [],
+        "blocked_permissions": []
     },
     "webhook": {
         "enabled": True,
@@ -358,6 +359,13 @@ def normalize_config(cfg: dict) -> dict:
     plugins = {**plugins_defaults, **plugins}
     plugins["enabled"] = bool(plugins.get("enabled", True))
     plugins["list"] = [str(item) for item in plugins.get("list") or [] if isinstance(item, str)]
+    raw_blocked = plugins.get("blocked_permissions")
+    valid_permissions = {"net", "shell", "fs", "env"}
+    plugins["blocked_permissions"] = sorted({
+        str(item).strip().lower()
+        for item in (raw_blocked if isinstance(raw_blocked, list) else [])
+        if isinstance(item, str) and str(item).strip().lower() in valid_permissions
+    })
     cfg["plugins"] = plugins
 
     webhook_defaults = DEFAULT_CONFIG["webhook"]

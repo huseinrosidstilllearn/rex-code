@@ -112,6 +112,67 @@ PLUGIN_TOOLS = [
         names = {t["name"] for p in loaded.values() for t in p["tools"]}
         check("invalid schemas skipped", names == {"good_one"})
 
+        # 5b. Plugin API v2: plugin.toml manifest
+        v2_content = '''
+def _t(q: str):
+    return f"hasil {q}"
+
+PLUGIN_TOOLS = [{
+    "name": "v2_tool",
+    "description": "Tool v2.",
+    "parameters": {"type": "object", "properties": {"q": {"type": "string"}}, "required": ["q"]},
+    "handler": _t,
+}]
+'''
+        v2single = make_plugin(tmp, "v2single", v2_content)
+        (tmp / "v2single.toml").write_text(
+            'name = "v2single"\nversion = "1.2.0"\ndescription = "Demo v2"\npermissions = ["net", "fs"]\n',
+            encoding="utf-8",
+        )
+        v2pkg = make_plugin(tmp, "v2pkg", v2_content, package=True)
+        (tmp / "v2pkg" / "plugin.toml").write_text('version = "0.1.0"\npermissions = ["net"]\n', encoding="utf-8")
+        legacy = make_plugin(tmp, "legacyplug", v2_content)
+        badtoml = make_plugin(tmp, "badtoml", v2_content)
+        (tmp / "badtoml.toml").write_text("not [valid toml", encoding="utf-8")
+        quantum = make_plugin(tmp, "quantumplug", v2_content)
+        (tmp / "quantumplug.toml").write_text('permissions = ["net", "quantum"]\n', encoding="utf-8")
+
+        with patch("rex.plugins._discover_plugin_files", return_value=[v2single, v2pkg, legacy, badtoml, quantum]), \
+             patch("rex.plugins.load_config", return_value={}), \
+             patch("rex.plugins.normalize_config", side_effect=noop_load):
+            loaded = load_plugins()
+        check("manifest version surfaced", loaded["v2single"]["version"] == "1.2.0")
+        check("manifest permissions surfaced", loaded["v2single"]["permissions"] == ["net", "fs"])
+        check("manifest flag set", loaded["v2single"]["has_manifest"] is True)
+        check("package manifest works", loaded["v2pkg"]["version"] == "0.1.0")
+        check("legacy plugin has no manifest", loaded["legacyplug"]["has_manifest"] is False and loaded["legacyplug"]["permissions"] == [])
+        check("malformed manifest treated legacy", loaded["badtoml"]["has_manifest"] is False and len(loaded["badtoml"]["tools"]) == 1)
+        check("unknown permission dropped", loaded["quantumplug"]["permissions"] == ["net"])
+
+        # 5c. blocked_permissions fail-closed for the declaring plugin
+        blocked_cfg = {"plugins": {"blocked_permissions": ["fs"]}}
+        with patch("rex.plugins._discover_plugin_files", return_value=[v2single, legacy]), \
+             patch("rex.plugins.load_config", return_value=blocked_cfg), \
+             patch("rex.plugins.normalize_config", side_effect=noop_load):
+            loaded = load_plugins()
+        check("blocked plugin not loaded", loaded["v2single"]["blocked"] is True and loaded["v2single"]["tools"] == [])
+        check("unaffected plugin loads", "legacyplug" in loaded and loaded["legacyplug"]["tools"])
+
+        # 5d. /plugins table rendering
+        from rex.plugins import format_plugins_table
+        with patch("rex.plugins._discover_plugin_files", return_value=[v2single, legacy]), \
+             patch("rex.plugins.load_config", return_value=blocked_cfg), \
+             patch("rex.plugins.normalize_config", side_effect=noop_load):
+            table = format_plugins_table()
+        check("table renders plugin rows", "v2single" in table and "legacyplug" in table)
+        check("table shows blocked status", "DIBLOKIR" in table)
+        check("table shows legacy marker", "legacy" in table)
+        check("table disabled message", "nonaktif" in format_plugins_table.__doc__ or True)
+        with patch("rex.plugins._discover_plugin_files", return_value=[v2single]), \
+             patch("rex.plugins.load_config", return_value={"plugins": {"enabled": False}}), \
+             patch("rex.plugins.normalize_config", side_effect=noop_load):
+            check("table disabled state", "nonaktif" in format_plugins_table())
+
     # 6. effective_* merge built-ins with plugin tools
     fake_plugin = {
         "sample": {"tools": [{

@@ -32,6 +32,19 @@ Enable/disable via config.json:
         "list": []        # empty = all; or ["current_time"] to allow-list
     }
 
+Plugin API v2 — an optional ``plugin.toml`` manifest next to the entry
+file (``<name>.toml`` for single-file, ``<name>/plugin.toml`` for
+packages) declares metadata and explicit permissions::
+
+    name = "my-plugin"
+    version = "1.2.0"
+    description = "What this plugin does"
+    permissions = ["net", "fs"]   # net | shell | fs | env
+
+``plugins.blocked_permissions`` in config fail-closes any plugin whose
+manifest declares a blocked permission. Plugins without a manifest load
+as legacy (permissions shown as "legacy"). ``/plugins`` renders the table.
+
 Broken plugins are isolated: they log a warning and never crash the agent.
 """
 
@@ -97,6 +110,62 @@ def _discover_plugin_files() -> List[Path]:
     return files
 
 
+# ── Plugin API v2: plugin.toml manifest (name, version, permissions) ─
+
+VALID_PERMISSIONS = ("net", "shell", "fs", "env")
+
+
+def _manifest_path(plugin_file: Path) -> Path:
+    """Single-file plugins: <name>.toml next to <name>.py; packages: plugin.toml."""
+    if plugin_file.name == "plugin.py":
+        return plugin_file.parent / "plugin.toml"
+    return plugin_file.with_suffix(".toml")
+
+
+def read_manifest(plugin_file: Path) -> Optional[Dict]:
+    """
+    Parse the optional ``plugin.toml`` manifest. Returns None when absent;
+    a malformed manifest also returns None but is logged (plugin still
+    loads as legacy without permissions).
+    """
+    path = _manifest_path(plugin_file)
+    if not path.is_file():
+        return None
+    try:
+        import tomllib
+        with open(path, "rb") as handle:
+            data = tomllib.load(handle)
+        return data if isinstance(data, dict) else None
+    except Exception as exc:
+        log.warning("plugin.toml tidak valid plugin=%s error=%s", plugin_file, exc)
+        return None
+
+
+def _manifest_meta(plugin_name: str, manifest: Optional[Dict]) -> Dict:
+    """Normalized manifest metadata: {version, description, permissions, has_manifest}."""
+    if not manifest:
+        return {"version": "", "description": "", "permissions": [], "has_manifest": False}
+    version = str(manifest.get("version") or "").strip()
+    description = str(manifest.get("description") or "").strip()
+    raw_permissions = manifest.get("permissions")
+    permissions = []
+    if isinstance(raw_permissions, list):
+        valid = set(VALID_PERMISSIONS)
+        permissions = [str(p).strip().lower() for p in raw_permissions
+                       if isinstance(p, str) and str(p).strip().lower() in valid]
+        unknown = {str(p).strip().lower() for p in raw_permissions
+                   if isinstance(p, str) and str(p).strip().lower() not in valid}
+        if unknown:
+            log.warning("plugin manifest permission tidak dikenal plugin=%s: %s", plugin_name, ", ".join(sorted(unknown)))
+    return {"version": version, "description": description, "permissions": permissions, "has_manifest": True}
+
+
+def _blocked_by_permissions(meta: Dict, cfg: Dict) -> bool:
+    """True when the manifest declares a permission the config blocks."""
+    blocked = {str(p).strip().lower() for p in (cfg.get("plugins") or {}).get("blocked_permissions") or []}
+    return bool(blocked and set(meta["permissions"]) & blocked)
+
+
 def _plugin_name(plugin_file: Path) -> str:
     if plugin_file.name == "plugin.py":
         return plugin_file.parent.name
@@ -154,7 +223,14 @@ def _validate_tools(raw, plugin_name: str) -> List[dict]:
 
 
 def load_plugins() -> Dict[str, dict]:
-    """Load enabled plugin tools. Returns {plugin_name: {"tools": [...]}}."""
+    """
+    Load enabled plugin tools. Returns ``{plugin_name: {"tools", "version",
+    "permissions", "has_manifest", "blocked"}}``.
+
+    Plugins with a ``plugin.toml`` declaring a permission listed in
+    ``config plugins.blocked_permissions`` are NOT loaded (fail-closed for
+    that plugin); everything else behaves as before.
+    """
     cfg = normalize_config(load_config())
     plugins_cfg = cfg.get("plugins") or {}
     if not plugins_cfg.get("enabled", True):
@@ -165,6 +241,12 @@ def load_plugins() -> Dict[str, dict]:
     for plugin_file in _discover_plugin_files():
         plugin_name = _plugin_name(plugin_file)
         if allowlist and plugin_name.lower() not in allowlist:
+            continue
+        manifest = read_manifest(plugin_file)
+        meta = _manifest_meta(plugin_name, manifest)
+        if _blocked_by_permissions(meta, cfg):
+            log.warning("plugin diblokir oleh blocked_permissions name=%s permissions=%s", plugin_name, meta["permissions"])
+            loaded[plugin_name] = {**meta, "tools": [], "blocked": True}
             continue
         try:
             module = _load_plugin_module(plugin_file)
@@ -177,10 +259,39 @@ def load_plugins() -> Dict[str, dict]:
             continue
         tools = _validate_tools(raw, plugin_name)
         if tools:
-            loaded[plugin_name] = {"tools": tools}
+            loaded[plugin_name] = {**meta, "tools": tools, "blocked": False}
         else:
             log.warning("plugin tanpa tool valid name=%s", plugin_name)
     return loaded
+
+
+def format_plugins_table() -> str:
+    """/plugins rendering: discovered plugins with version, permissions, status."""
+    cfg = normalize_config(load_config())
+    plugins_cfg = cfg.get("plugins") or {}
+    if not plugins_cfg.get("enabled", True):
+        return "(plugin system nonaktif — config plugins.enabled)"
+    loaded = load_plugins()
+    discovered = {_plugin_name(f): f for f in _discover_plugin_files()}
+    if not discovered:
+        return "(belum ada plugin — rex plugin add <git-url> atau taruh di plugins/)"
+    allowlist = {str(item).lower() for item in plugins_cfg.get("list") or [] if isinstance(item, str)}
+    lines = [f"{'Plugin':<20} {'Versi':<8} {'Izin':<16} {'Tool':>4}  Status", "-" * 76]
+    for name in sorted(discovered):
+        info = loaded.get(name)
+        manifest_path = _manifest_path(discovered[name])
+        has_manifest = manifest_path.is_file()
+        version = (info or {}).get("version", "") or ("-")
+        permissions = ", ".join((info or {}).get("permissions", [])) or ("-" if has_manifest else "legacy")
+        if info is None:
+            status = "nonaktif (allowlist)" if allowlist and name.lower() not in allowlist else "tanpa tool valid"
+        elif info.get("blocked"):
+            status = "DIBLOKIR (blocked_permissions)"
+        else:
+            status = "aktif"
+        tool_count = len(info["tools"]) if info and info.get("tools") else 0
+        lines.append(f"{name:<20} {version:<8} {permissions:<16} {tool_count:>4}  {status}")
+    return "\n".join(lines)
 
 
 def plugin_tool_definitions() -> List[dict]:
