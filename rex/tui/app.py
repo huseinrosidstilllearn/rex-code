@@ -384,6 +384,7 @@ class CommandPalette(Container):
             ("/resume", "Continue a past session"),
             ("/new", "Start a fresh session"),
             ("/rewind", "Restore an older checkpoint"),
+            ("/compare", "Ask several providers the same question"),
             ("/status", "Full subsystem health report"),
             ("/help", "Show help"),
             ("/exit", "Exit Rex Code"),
@@ -814,6 +815,15 @@ class RexTUIApp(App):
             elif cmd == "/doctor":
                 from rex.review import format_doctor
                 chat.write(format_doctor())
+            elif cmd == "/compare":
+                question = text[len("/compare"):].strip()
+                if not question:
+                    chat.write("[dim]Usage: /compare <pertanyaan> — bandingkan jawaban antar provider[/dim]")
+                else:
+                    from rex.core import compare_models, format_compare
+                    chat.write("[dim]Menjalankan prompt di beberapa provider…[/dim]")
+                    results = compare_models(question)
+                    chat.write(format_compare(results))
             elif cmd == "/status":
                 from rex.status import format_status
                 chat.write(format_status())

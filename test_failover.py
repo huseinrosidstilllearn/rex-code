@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -107,6 +108,48 @@ def main():
         with patch.object(core_mod.GeminiProvider, "chat_simple_with_usage", side_effect=RuntimeError("down")):
             out3 = agent3.run("halo")
     check("exhausted chain -> graceful message", "Provider gagal" in out3)
+
+    # ── 6. compare_models: one prompt, N providers, parallel ──────────
+    from rex.core import compare_models, format_compare
+
+    class TaggedRouter:
+        def __init__(self, tag):
+            self.tag = tag
+
+        def chat(self, messages, system_prompt, tools=None):
+            import time as t
+            t.sleep(0.05)
+            return LLMResponse(content=f"jawaban {self.tag}: {messages[0]['content']}")
+
+    def boom_chat(messages, system_prompt, tools=None):
+        raise RuntimeError("variannya mati")
+
+    broken = SimpleNamespace(chat=boom_chat)
+    with patch.object(core_mod, "build_provider",
+                      side_effect=lambda pid, m, cfg=None: TaggedRouter(f"{pid}") if pid != "omni" else broken):
+        results = compare_models("apa itu recurse?", variants=[("gemini", "m1"), ("omni", "om"), ("loc", "ll")])
+    check("compare returns one entry per variant", len(results) == 3)
+    check("compare order preserved", [r["provider"] for r in results] == ["gemini", "omni", "loc"])
+    check("compare parallel answers", results[0]["answer"] == "jawaban gemini: apa itu recurse?" and results[2]["answer"] == "jawaban loc: apa itu recurse?")
+    check("compare isolates failures", results[1]["error"] is not None and "variannya mati" in results[1]["error"])
+    check("compare records elapsed", all(r["elapsed"] >= 0.0 for r in results))
+
+    # Default chain comes from get_llm_provider_with_fallback, capped
+    with patch.object(core_mod, "get_llm_provider_with_fallback",
+                      return_value=(object(), [("gemini", "m1"), ("omni", "om"), ("loc", "ll"), ("extra", "x")])), \
+         patch.object(core_mod, "build_provider", side_effect=lambda pid, m, cfg=None: TaggedRouter(pid)):
+        results = compare_models("halo")
+    check("compare default chain capped at 3", [r["provider"] for r in results] == ["gemini", "omni", "loc"])
+
+    # Empty prompt and chain failure are graceful
+    check("compare empty prompt", compare_models("   ")[0]["error"] == "prompt kosong")
+    with patch.object(core_mod, "get_llm_provider_with_fallback", side_effect=RuntimeError("no chain")):
+        check("compare chain failure", "no chain" in compare_models("x")[0]["error"])
+
+    report = format_compare(results)
+    check("compare renders labels", "gemini · m1" in report and "━━" in report)
+    broken_report = format_compare([{"provider": "omni", "model": "om", "answer": "", "elapsed": 1.0, "error": "mati"}])
+    check("compare renders failures", "[GAGAL] mati" in broken_report)
 
     print("\nFailover checks ALL PASS")
 

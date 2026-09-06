@@ -9,6 +9,7 @@ fallback chain (config "providers_fallback", ordered provider ids).
 
 from typing import List, Dict, Any, Callable, Optional
 import threading
+import time
 from rex.config import load_config, get_active_mode, set_active_mode
 from rex.prompts import PLAN_MODE_PROMPT, BUILD_MODE_PROMPT
 from rex.tools import TOOL_DEFINITIONS, TOOL_REGISTRY
@@ -29,6 +30,93 @@ class StepEvent:
     def __init__(self, event_type: str, data: Any):
         self.event_type = event_type  # 'thought', 'tool_call', 'tool_result', 'error', 'done', 'mode_switch'
         self.data = data
+
+
+# ────────────────────────────────────────────────────────────────────
+# Multi-model compare: one prompt, N providers, side-by-side answers
+# ────────────────────────────────────────────────────────────────────
+
+def compare_models(
+    prompt: str,
+    variants: Optional[List[tuple]] = None,
+    max_variants: int = 3,
+) -> List[Dict[str, Any]]:
+    """
+    Send one prompt to several provider/model pairs in parallel.
+
+    ``variants`` defaults to the active provider followed by the
+    configured fallback chain (capped at ``max_variants``). Each entry is
+    ``(provider_id, model)``; providers are built via ``build_provider``.
+
+    Returns one result per variant, in input order:
+    ``{"provider", "model", "answer", "elapsed", "error"}`` — ``answer``
+    is "" and ``error`` is set when that variant failed. Never raises.
+    """
+    prompt = str(prompt or "").strip()
+    if not prompt:
+        return [{"provider": "?", "model": "?", "answer": "", "elapsed": 0.0, "error": "prompt kosong"}]
+    try:
+        if not variants:
+            _, chain = get_llm_provider_with_fallback()
+            variants = chain[: max(1, int(max_variants))]
+    except Exception as exc:
+        return [{"provider": "?", "model": "?", "answer": "", "elapsed": 0.0, "error": str(exc)[:200]}]
+    variants = list(variants)[: max(1, int(max_variants))]
+
+    cfg = load_config()
+    try:
+        timeout = max(5, int(cfg.get("router_timeout_sec", 120)))
+    except (TypeError, ValueError):
+        timeout = 120
+
+    results: List[Dict[str, Any]] = [
+        {"provider": pid, "model": model, "answer": "", "elapsed": 0.0, "error": None}
+        for pid, model in variants
+    ]
+
+    def run_variant(index: int, provider_id: str, model_name: str) -> None:
+        started = time.time()
+        try:
+            provider = build_provider(provider_id, model_name)
+            if isinstance(provider, GeminiProvider):
+                response = provider.chat_simple_with_usage(
+                    message=prompt, system_prompt="", history=[]
+                )
+            else:
+                response = provider.chat(
+                    messages=[{"role": "user", "content": prompt}], system_prompt=""
+                )
+            results[index]["answer"] = response.content
+        except Exception as exc:
+            results[index]["error"] = f"{type(exc).__name__}: {str(exc)[:200]}"
+        finally:
+            results[index]["elapsed"] = round(time.time() - started, 2)
+
+    threads = [
+        threading.Thread(target=run_variant, args=(index, pid, model), daemon=True)
+        for index, (pid, model) in enumerate(variants)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=timeout)
+    return results
+
+
+def format_compare(results: List[Dict[str, Any]]) -> str:
+    """Render compare_models() output as a readable side-by-side block."""
+    if not results:
+        return "(tidak ada varian untuk dibandingkan)"
+    lines = []
+    for item in results:
+        label = f"{item['provider']} · {item['model']} ({item['elapsed']}s)"
+        lines.append(f"━━ {label} " + "━" * max(4, 50 - len(label)))
+        if item.get("error"):
+            lines.append(f"[GAGAL] {item['error']}")
+        else:
+            lines.append(str(item.get("answer") or "(jawaban kosong)")[:4000])
+        lines.append("")
+    return "\n".join(lines).rstrip()
 
 class RexAgent:
     def __init__(self, session_id: Optional[str] = None):

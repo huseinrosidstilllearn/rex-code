@@ -50,6 +50,7 @@ BUILTIN_COMMANDS = {
     "/test", "/checkpoints", "/undo", "/redo", "/help", "/exit", "/quit",
     "/voice", "/n8n", "/scheduler", "/anti-slop", "/files", "/sessions",
     "/new", "/use", "/delete", "/todos", "/resume", "/rewind", "/status",
+    "/compare",
 }
 
 
