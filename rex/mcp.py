@@ -31,6 +31,8 @@ import subprocess
 import threading
 from typing import Any, Dict, List, Optional
 
+import rex
+
 JSONRPC_VERSION = "2.0"
 PROTOCOL_VERSION = "2024-11-05"
 REQUEST_TIMEOUT = 30
@@ -101,7 +103,7 @@ class _HttpServer:
             "jsonrpc": JSONRPC_VERSION, "id": request_id, "method": "initialize",
             "params": {
                 "protocolVersion": PROTOCOL_VERSION, "capabilities": {},
-                "clientInfo": {"name": "rex-code", "version": "0.1.0"},
+                "clientInfo": {"name": "rex-code", "version": rex.__version__},
             },
         })
         if "error" in result:

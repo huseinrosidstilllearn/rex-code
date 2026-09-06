@@ -46,7 +46,7 @@ def fake_stream(chunks=(b"x" * 2_000_000,), status_code=200):
     return ctx
 
 
-RELEASE_NEWER = {"tag_name": "v0.2.0", "assets": []}
+RELEASE_NEWER = {"tag_name": "v0.3.0", "assets": []}
 SETTINGS = {
     "enabled": True,
     "repo": "acme/rex-code",
@@ -71,7 +71,7 @@ def main():
     check("v0.2.0 > 0.1.0 (prefix v)", compare_versions("v0.2.0", "0.1.0") == 1)
     check("0.1.0-beta == 0.1.0 (suffix)", compare_versions("0.1.0-beta", "0.1.0") == 0)
     check("0.10.0 > 0.9.0 (numeric, not lexical)", compare_versions("0.10.0", "0.9.0") == 1)
-    check("0.1.0 is current __version__", rex.__version__ == "0.1.0")
+    check("current __version__ is 0.2.0", rex.__version__ == "0.2.0")
 
     # ── 2. GitHub release fetch (mocked, never raises) ───────────────
     with patch.object(updates.httpx, "get", return_value=fake_response(200, RELEASE_NEWER)):
@@ -123,12 +123,12 @@ def main():
         cache_file.write_text("{}", encoding="utf-8")
         with patch.object(updates.httpx, "get", return_value=fake_response(200, RELEASE_NEWER)):
             got = check_for_update(SETTINGS)
-        check("newer version detected", got == "0.2.0")
-        check("cache written after check", json.loads(cache_file.read_text())["newer_version"] == "0.2.0")
+        check("newer version detected", got == "0.3.0")
+        check("cache written after check", json.loads(cache_file.read_text())["newer_version"] == "0.3.0")
 
         # fresh cache: zero network calls
         with patch.object(updates.httpx, "get", side_effect=AssertionError("network called")) as m:
-            check("fresh cache serves 0.2.0", check_for_update(SETTINGS) == "0.2.0")
+            check("fresh cache serves 0.3.0", check_for_update(SETTINGS) == "0.3.0")
             m.assert_not_called()
         cache_file.write_text(json.dumps({"checked_at": time.time(), "latest": "v0.1.0", "newer_version": ""}), encoding="utf-8")
         with patch.object(updates.httpx, "get", side_effect=AssertionError("network called")) as m:
@@ -138,7 +138,7 @@ def main():
         # stale cache triggers a new network call
         cache_file.write_text(json.dumps({"checked_at": time.time() - 25 * 3600, "latest": "v0.1.0", "newer_version": ""}), encoding="utf-8")
         with patch.object(updates.httpx, "get", return_value=fake_response(200, RELEASE_NEWER)) as m:
-            check("stale cache re-checks network", check_for_update(SETTINGS) == "0.2.0")
+            check("stale cache re-checks network", check_for_update(SETTINGS) == "0.3.0")
             m.assert_called_once()
 
         # network failure with stale cache -> None, failure cached (no raise)
@@ -247,7 +247,7 @@ def main():
 
     # ── 9. Version centralization across the repo ────────────────────
     iss = Path("installer/windows/rexcode.iss").read_text(encoding="utf-8")
-    check("installer default version 0.1.0", '#define AppVersion "0.1.0"' in iss)
+    check("installer default version 0.2.0", '#define AppVersion "0.2.0"' in iss)
     tui = Path("rex/tui/app.py").read_text(encoding="utf-8")
     check("TUI banner uses __version__ (no hardcoded 1.0.0)", 'Rex Code v{rex.__version__}' in tui and "v1.0.0" not in tui)
     cli_src = Path("cli.py").read_text(encoding="utf-8")

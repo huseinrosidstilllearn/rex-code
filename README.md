@@ -9,7 +9,7 @@
 You think it, Rex builds it. PLAN before you act, BUILD when you approve —
 with a sandboxed tool layer, sub-agent specialists, and one-click installer.
 
-[![Release](https://img.shields.io/badge/Release-v0.1.0-22C55E?logo=github)](https://github.com/huseinrosidstilllearn/rex-code/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v0.2.0-22C55E?logo=github)](https://github.com/huseinrosidstilllearn/rex-code/releases/latest)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](#-from-source)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?logo=windows)](#-from-source)
 [![License](https://img.shields.io/badge/License-MIT-8B5CF6)](LICENSE)
@@ -22,7 +22,7 @@ with a sandboxed tool layer, sub-agent specialists, and one-click installer.
 
 ## 🚀 Quick Install (Windows)
 
-1. Download **`RexCode-Setup-v0.1.0-x64.exe`** from [Releases](https://github.com/huseinrosidstilllearn/rex-code/releases/latest).
+1. Download **`RexCode-Setup-v0.2.0-x64.exe`** from [Releases](https://github.com/huseinrosidstilllearn/rex-code/releases/latest).
 2. Run it — if SmartScreen appears: **More info → Run anyway** (normal for unsigned open-source apps; see [guide](PANDUAN-INSTALL.md)).
 3. Follow the wizard (EN/🇮🇩), then launch **Rex Code** from the Start Menu.
 4. First run: put `GEMINI_API_KEY=...` in `%LOCALAPPDATA%\RexCode\.env` ([free key](https://aistudio.google.com)) — Rex shows you exactly where when it starts.
@@ -250,13 +250,22 @@ row contract, history cap, minute dedup). A green run means it is safe to push.
 - [x] **Headless mode** — `rex -p "prompt" --json` for scripts and CI (deny-by-default on destructive actions)
 - [x] **Checkpoints & `/undo`** — shadow-git snapshot per BUILD action, instant rollback + `/redo`
 - [x] **Context compaction** — auto-summarize long sessions via LLM instead of truncating
-- [x] **MCP client (stdio)** — Model Context Protocol servers exposed as agent tools (`mcp_<server>_<tool>`)
+- [x] **MCP client (stdio + HTTP)** — Model Context Protocol servers exposed as agent tools (`mcp_<server>_<tool>`)
+- [x] **Checksum-verified updates** — SHA256 checked against the release's SHA256SUMS.txt before auto-install
+- [x] **Approval gate for external tools** — MCP/plugin tools confirm like built-in destructive tools; errors secret-redacted
+- [x] **Provider fallback chain** — `providers_fallback` config; failed provider retries the round on the next one
+- [x] **`/diff` + `/doctor` + test hook** — session change review, install health check, auto test-run convention
+- [x] **`/stats`** — local token usage & cost estimate per session/day (`model_costs` config)
+- [x] **`/commit` + `/pr`** — AI-generated conventional commit message & PR description from the real diff
+- [x] **Multimodal + `@file`** — send images (vision) and inject files into any message
+- [x] **`rex plugin add <git-url>`** — install community plugins from git
+- [x] **Update channels** — stable / beta (prereleases)
+- [x] **`/ask` + `/imports`** — local code index: symbol search and import graph
+- [x] **'Open Rex Code here'** — Explorer right-click menu + project-scoped mode (REX_WORKSPACE)
+- [x] **Post-update changelog** — release notes shown once after updating
 
 **Next — must-haves for a serious native agent (prioritized)**
 
-- [ ] **Diff review** — `/diff` before apply, approve/reject each edit
-- [ ] **Auto test-run hook** — run the project's test command after edits, feed failures back
-- [ ] **MCP transports beyond stdio** — SSE / streamable HTTP
 - [ ] **Webhook HTTP host + FastAPI receiver** — wire `rex/webhooks.py` to an endpoint again
 - [ ] **winget/scoop distribution + code signing** — kill SmartScreen warnings for good
 

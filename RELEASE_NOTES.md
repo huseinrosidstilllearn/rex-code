@@ -1,4 +1,4 @@
-# Rex Code v0.2.0 — Sprint Mega: Keamanan & Paritas Agener
+# Rex Code v0.2.0 — Sprint Mega: Keamanan & Paritas Agen
 
 Rilis ketiga Rex Code: fondasi keamanan diperkuat dan banyak fitur baru,
 semuanya gratis dan open-source (MIT).
@@ -28,7 +28,12 @@ semuanya gratis dan open-source (MIT).
 - **Multimodal** — kirim gambar/screenshot ke agen (vision); `@file` untuk
   menyuntikkan file ke konteks
 - **MCP HTTP/SSE** — transport baru selain stdio; `rex plugin add <git-url>`
-- **`/ask`** — pencarian simbol cepat via indeks kode lokal
+- **`/ask` & `/imports`** — pencarian simbol via indeks kode lokal + graf
+  import antar-modul (repo map v2)
+- **`/sessions` lanjutan** — riwayat percakapan tersimpan lokal; `/stats`
+  merangkum token & biaya per hari
+- **Mode ter-proyek** — set `REX_WORKSPACE` (atau lewat menu klik-kanan)
+  agar config, sesi, dan log hidup di dalam folder proyek
 - **Klik-kanan Explorer** — "Open Rex here" di Windows (via installer)
 - **Tema TUI** + tampilan changelog singkat setelah auto-update sukses
 

@@ -3,5 +3,5 @@ Rex Code - Autonomous AI Coding & Workflow Agent
 Built for D:\00 HUSEIN AI PROJECT\Rex Code
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Husein AI Project"
