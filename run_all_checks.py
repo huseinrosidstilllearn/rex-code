@@ -32,6 +32,7 @@ CHECKS = [
     "test_stats.py",
     "test_autogit.py",
     "test_vision.py",
+    "test_ecosystem.py",
 ]
 
 

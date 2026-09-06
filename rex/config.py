@@ -117,7 +117,8 @@ DEFAULT_CONFIG = {
         "check_interval_hours": 24,
         "auto_download": True,
         "auto_install": True,
-        "download_dir": None
+        "download_dir": None,
+        "channel": "stable"
     },
     "approval": {
         "enabled": False,
@@ -380,15 +381,25 @@ def normalize_config(cfg: dict) -> dict:
         servers = {}
     valid_servers = {}
     for name, server_cfg in servers.items():
-        if isinstance(name, str) and name.strip() and isinstance(server_cfg, dict) and isinstance(server_cfg.get("command"), str) and server_cfg["command"].strip():
-            entry = {
-                "command": server_cfg["command"].strip(),
-                "args": [str(a) for a in server_cfg.get("args") or []],
-            }
+        if not isinstance(name, str) or not name.strip() or not isinstance(server_cfg, dict):
+            continue
+        entry = {}
+        command = server_cfg.get("command")
+        url = server_cfg.get("url")
+        if isinstance(command, str) and command.strip():
+            entry["command"] = command.strip()
+            entry["args"] = [str(a) for a in server_cfg.get("args") or []]
             env = server_cfg.get("env")
             if isinstance(env, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in env.items()):
                 entry["env"] = env
-            valid_servers[name.strip()] = entry
+        elif isinstance(url, str) and url.startswith(("http://", "https://")):
+            entry["url"] = url.strip()
+            headers = server_cfg.get("headers")
+            if isinstance(headers, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in headers.items()):
+                entry["headers"] = headers
+        else:
+            continue
+        valid_servers[name.strip()] = entry
     mcp["servers"] = valid_servers
     cfg["mcp"] = mcp
 
@@ -416,6 +427,8 @@ def normalize_config(cfg: dict) -> dict:
     if download_dir is not None and (not isinstance(download_dir, str) or not download_dir.strip()):
         download_dir = None
     updates["download_dir"] = download_dir
+    channel = str(updates.get("channel") or "stable").lower()
+    updates["channel"] = channel if channel in ("stable", "beta") else "stable"
     cfg["updates"] = updates
 
     approval_defaults = DEFAULT_CONFIG["approval"]

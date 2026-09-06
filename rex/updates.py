@@ -98,12 +98,16 @@ def compare_versions(a: str, b: str) -> int:
 # GitHub Releases API
 # ──────────────────────────────────────────────────────────────────────
 
-def get_latest_release(repo: str, timeout: float = 5.0) -> Optional[Dict]:
+def get_latest_release(repo: str, timeout: float = 5.0, channel: str = "stable") -> Optional[Dict]:
     """
-    Return the latest release JSON from GitHub, or None on any failure.
-    Never raises.
+    Return the newest release JSON from GitHub, or None on any failure.
+    channel "beta" considers prereleases (newest entry of /releases);
+    "stable" uses /releases/latest. Never raises.
     """
-    url = f"https://api.github.com/repos/{repo}/releases/latest"
+    if channel == "beta":
+        url = f"https://api.github.com/repos/{repo}/releases?per_page=10"
+    else:
+        url = f"https://api.github.com/repos/{repo}/releases/latest"
     try:
         response = httpx.get(
             url,
@@ -118,6 +122,11 @@ def get_latest_release(repo: str, timeout: float = 5.0) -> Optional[Dict]:
             log.debug(f"update check: HTTP {response.status_code} from {url}")
             return None
         data = response.json()
+        if channel == "beta":
+            # Newest published release first (prereleases included).
+            if isinstance(data, list) and data and isinstance(data[0], dict):
+                return data[0]
+            return None
         return data if isinstance(data, dict) else None
     except Exception as exc:  # offline, timeout, bad JSON, ...
         log.debug(f"update check failed: {exc}")
@@ -337,7 +346,11 @@ def check_for_update(settings: Dict, current_version: Optional[str] = None) -> O
             return cached_newer
         return None
 
-    release = get_latest_release(repo, timeout=float(settings.get("timeout_sec", 5)))
+    release = get_latest_release(
+        repo,
+        timeout=float(settings.get("timeout_sec", 5)),
+        channel=str(settings.get("channel", "stable")),
+    )
     # Write cache even on failure: avoids hammering a dead network on
     # every startup. Failure results re-check after the full interval.
     latest = str(release.get("tag_name") or "") if release else ""
@@ -378,7 +391,10 @@ def maybe_update(
             return
 
         download_dir = Path(str(settings.get("download_dir") or (LOGS_DIR.parent / "downloads")))
-        release = get_latest_release(str(settings.get("repo") or ""))
+        release = get_latest_release(
+            str(settings.get("repo") or ""),
+            channel=str(settings.get("channel", "stable")),
+        )
         if not release:
             return
         asset = pick_asset(release.get("assets") or [])

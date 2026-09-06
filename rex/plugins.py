@@ -207,6 +207,53 @@ def plugin_registry() -> Dict[str, Callable]:
     return registry
 
 
+def _run_git(args: List[str], timeout: int = 120) -> Tuple[int, str]:
+    """Run git in PLUGINS_DIR's parent (the data dir). Returns (code, output)."""
+    import subprocess
+    from rex.config import DATA_DIR
+    try:
+        result = subprocess.run(
+            ["git", *args], cwd=str(DATA_DIR), capture_output=True, text=True,
+            timeout=timeout, encoding="utf-8", errors="replace",
+        )
+        return result.returncode, (result.stdout or "") + (result.stderr or "")
+    except Exception as exc:
+        return 1, str(exc)
+
+
+def install_plugin_from_git(url: str, name: Optional[str] = None) -> str:
+    """
+    Install a plugin from a git URL: shallow-clone into plugins/<name>.
+    The plugin becomes active on the next tool listing (if it exposes
+    valid PLUGIN_TOOLS / register()). Returns a human-readable result.
+    """
+    url = str(url or "").strip()
+    if not url.startswith(("https://", "git@")):
+        return "Error: hanya URL git https:// atau git@ yang didukung."
+    if not name:
+        tail = url.rstrip("/").rsplit("/", 1)[-1]
+        name = tail[:-4] if tail.endswith(".git") else tail
+    name = _sanitize_plugin_name(name or "")
+    if not name or name.startswith("_"):
+        return f"Error: nama plugin tidak valid: '{name}'"
+    target = PLUGINS_DIR / name
+    if target.exists():
+        return f"Error: plugin '{name}' sudah ada di {target} — hapus dulu bila ingin mengganti."
+    code, output = _run_git(["clone", "--depth", "1", url, str(target)])
+    if code != 0:
+        return f"Error: clone gagal: {output.strip()[:300]}"
+    entry = target / "plugin.py"
+    if not entry.is_file() and not (target / "__init__.py").is_file():
+        # Not fatal: single-file layouts drop plugin.py at the root; anything
+        # else still cloned, but warn that discovery may skip it.
+        return f"Terpasang di {target} (perhatian: tidak ada plugin.py di root)."
+    return f"Plugin '{name}' terpasang di {target} — aktif pada sesi berikutnya."
+
+
+def _sanitize_plugin_name(name: str) -> str:
+    return "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in name).strip("_")
+
+
 def effective_tool_definitions() -> List[dict]:
     """Built-in tool schemas plus plugin and MCP tool schemas."""
     from rex.tools import TOOL_DEFINITIONS
