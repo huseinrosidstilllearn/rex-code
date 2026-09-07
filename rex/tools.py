@@ -141,8 +141,52 @@ def write_file(path: str, content: str) -> str:
     except Exception as e:
         return f"Error saat menulis file: {str(e)}"
 
+def _fuzzy_find(data: str, target: str) -> Optional[tuple]:
+    """
+    Whitespace-tolerant match for edit_file: exact match first, then a
+    line-window match where indentation/trailing whitespace may differ.
+
+    Returns (start, end) character span of the best match, or None.
+    """
+    if target in data:
+        pos = data.find(target)
+        return (pos, pos + len(target))
+
+    def norm(s: str) -> str:
+        return s.rstrip()
+
+    data_lines = data.split("\n")
+    target_lines = [l for l in target.split("\n")]
+    # Drop leading/trailing blank target lines so surrounding whitespace
+    # differences don't break the match.
+    while target_lines and not target_lines[0].strip():
+        target_lines.pop(0)
+    while target_lines and not target_lines[-1].strip():
+        target_lines.pop()
+    if not target_lines:
+        return None
+    # Tolerant comparison: ignore leading/trailing whitespace per line.
+    t_stripped = [l.strip() for l in target_lines]
+
+    n = len(t_stripped)
+    best = None
+    for i in range(len(data_lines) - n + 1):
+        window = data_lines[i:i + n]
+        if all(w.strip() == t for w, t in zip(window, t_stripped)):
+            start_char = sum(len(l) + 1 for l in data_lines[:i])
+            end_lines = i + n
+            end_char = sum(len(l) + 1 for l in data_lines[:end_lines]) - 1
+            # The match must span the whole final target line; when the file
+            # has no trailing newline the last line has no \n to consume.
+            end_char = min(end_char, len(data))
+            best = (start_char, end_char)
+            break
+    return best
+
+
 def edit_file(path: str, target_content: str, replacement_content: str) -> str:
-    """Mengganti potongan teks tertentu di dalam file (Hanya aktif di Mode Build)."""
+    """Mengganti potongan teks tertentu di dalam file (Hanya aktif di Mode Build).
+    Pencarian cocok secara fuzzy terhadap perbedaan whitespace/indentasi."""
     mode = get_active_mode()
     if mode == "plan":
         return "TIDAK DIIZINKAN: Anda sedang berada di Mode Plan. Modifikasi file hanya diizinkan di Mode Build."
@@ -158,9 +202,15 @@ def edit_file(path: str, target_content: str, replacement_content: str) -> str:
     try:
         with open(target, "r", encoding="utf-8") as f:
             data = f.read()
-        if target_content not in data:
-            return "Error: Potongan target_content tidak ditemukan secara persis di dalam file."
-        new_data = data.replace(target_content, replacement_content, 1)
+        span = _fuzzy_find(data, target_content)
+        if span is None:
+            return (
+                "Error: Potongan target_content tidak ditemukan (bahkan secara fuzzy whitespace). "
+                "Perbaiki teks target agar persis sama dengan isi file (read_file dulu bila perlu), "
+                "atau gunakan apply_patch dengan unified diff untuk perubahan multi-baris."
+            )
+        start, end = span
+        new_data = data[:start] + replacement_content + data[end:]
         with open(target, "w", encoding="utf-8") as f:
             f.write(new_data)
         return f"Berhasil mengedit file: {target.name}"
@@ -825,12 +875,12 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "edit_file",
-        "description": "Mengganti teks tertentu di dalam file yang sudah ada (Hanya aktif di Mode Build).",
+        "description": "Mengganti teks tertentu di dalam file yang sudah ada (Hanya aktif di Mode Build). Cocok secara fuzzy terhadap perbedaan whitespace/indentasi. Untuk perubahan multi-blok, UTAMAKAN apply_patch.",
         "parameters": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Path file yang ingin diedit"},
-                "target_content": {"type": "string", "description": "Teks persis yang ingin diganti"},
+                "path": {"type": "string", "description": "Path file yang ingin diedit (baca dulu dengan read_file sebelum edit)"},
+                "target_content": {"type": "string", "description": "Teks persis yang ingin diganti (boleh beda whitespace/indentasi)"},
                 "replacement_content": {"type": "string", "description": "Teks baru pengganti"}
             },
             "required": ["path", "target_content", "replacement_content"]

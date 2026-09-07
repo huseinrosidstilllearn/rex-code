@@ -140,6 +140,23 @@ def main():
         check("step_limit event fired", "step_limit" in kinds)
         check("step limit summary lists tools", "probe_tool" in out)
 
+    # ── 5. edit_file fuzzy matching (whitespace-tolerant) ─────────────
+    from rex.tools import _fuzzy_find
+
+    check("fuzzy: exact match", _fuzzy_find("def foo():\n    return 1\n", "return 1") == (15, 23))
+    check("fuzzy: indentation tolerant", _fuzzy_find("def foo():\n    return 1\n", "\t\treturn 1") is not None)
+    check("fuzzy: trailing whitespace tolerant", _fuzzy_find("x = 1   \n", "x = 1") is not None)
+    check("fuzzy: file without trailing newline", _fuzzy_find("a\nb\nc", "b\nc") == (2, 5))
+    check("fuzzy: blank-line padding tolerant", _fuzzy_find("a\n\n\n  hello  \n", "\n\nhello\n") is not None)
+    check("fuzzy: no match -> None", _fuzzy_find("aaa\nbbb", "zzz") is None)
+    check("fuzzy: multiline window", _fuzzy_find("def a():\n    x = 1\n    y = 2\n\ndef b():\n", "x = 1\n    y = 2") == (13, 28))
+
+    # ── 6. BUILD_MODE_PROMPT encodes the verification discipline ──────
+    from rex.prompts import BUILD_MODE_PROMPT
+
+    for keyword in ["Baca sebelum mengedit", "apply_patch", "Verifikasi sebelum klaim selesai", "todo_write"]:
+        check(f"prompt mentions: {keyword}", keyword in BUILD_MODE_PROMPT)
+
     print("\nAgentic guard checks ALL PASS")
 
 
