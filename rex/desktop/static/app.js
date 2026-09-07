@@ -4,8 +4,9 @@
 const $ = (id) => document.getElementById(id);
 const state = {
   running: false, mode: "PLAN", session: null, title: "",
-  providers: [], activeProvider: null, settings: {}, files: [],
+  providers: [], activeProvider: null, settings: {}, files: [], sessions: [],
   acItems: [], acIndex: 0, acToken: null, streamEl: null,
+  sideTab: "sessions", todosData: null, cps: null, health: null,
 };
 
 // ── tiny helpers ────────────────────────────────────────────
@@ -84,6 +85,13 @@ function renderEvent(ev) {
       break;
     case "todo_update": renderTodos(ev.todos || []); break;
     case "usage_alert": bubble("warn", ev.text || "Token budget alert"); break;
+    case "checkpoint_rolled":
+      { const label = ev.action === "undo" ? "Undo" : ev.action === "redo" ? "Redo" : "Rewind";
+        const target = ev.restored || ev.previous || "";
+        bubble("success", "⟲ " + label + " selesai" + (target ? " → " + String(target).slice(0, 7) : "") + ". Perubahan lama aman tersimpan (bisa di-Redo).");
+        refreshSessions();
+        if (state.sideTab === "cp") setSideTab("cp"); }
+      break;
     case "mode_changed": state.mode = ev.mode; paintMode(); break;
     case "session_changed":
       state.session = ev.session_id; state.title = ev.title || "";
@@ -143,7 +151,9 @@ async function refreshState() {
 }
 async function refreshSessions() {
   const data = await api("/api/sessions");
+  state.sessions = data.sessions || [];
   const list = $("session-list");
+  if (state.sideTab !== "sessions") return;
   list.innerHTML = "";
   (data.sessions || []).forEach((s) => {
     const item = el("div", "session-item" + (s.id === state.session ? " active" : ""));
@@ -163,6 +173,115 @@ function renderTodos(todos) {
     list.appendChild(line);
   });
 }
+
+// ── sidebar tabs: sessions / files / todos / checkpoints ───
+function setSideTab(tab) {
+  state.sideTab = tab;
+  ["sessions", "files", "todos", "cp"].forEach((t) =>
+    $("stab-" + t).classList.toggle("active", t === tab));
+  const list = $("session-list");
+  list.innerHTML = "";
+  list.classList.remove("files-list", "cp-list");
+  if (tab === "sessions") refreshSessions();
+  else if (tab === "files") paintFilesTab(list);
+  else if (tab === "todos") paintTodosTab(list);
+  else paintCheckpointsTab(list);
+}
+async function paintFilesTab(list) {
+  const data = await api("/api/files");
+  state.files = data.files || [];
+  if (!state.files.length) { list.appendChild(el("div", "side-empty", "workspace kosong")); return; }
+  state.files.forEach((f) => {
+    const item = el("div", "session-item file-item", f);
+    item.title = "Klik untuk melampirkan @file di composer";
+    item.onclick = () => {
+      const input = $("input");
+      input.value = (input.value ? input.value.replace(/@[\w./-]*$/, "") : "") + "@" + f + " ";
+      input.focus();
+    };
+    list.appendChild(item);
+  });
+}
+async function paintTodosTab(list) {
+  const data = await api("/api/todos");
+  state.todosData = data;
+  const todos = data.todos || [];
+  if (data.summary) list.appendChild(el("div", "side-empty todo-summary", data.summary));
+  if (!todos.length) { list.appendChild(el("div", "side-empty", "belum ada todo di sesi ini")); return; }
+  todos.forEach((t) => {
+    const line = el("div", "session-item todo-line" + (t.status === "completed" ? " done" : ""));
+    line.textContent = (t.status === "completed" ? "☑" : t.status === "in_progress" ? "◐" : "☐") + " " + t.content;
+    list.appendChild(line);
+  });
+}
+async function paintCheckpointsTab(list) {
+  const data = await api("/api/checkpoints");
+  state.cps = data;
+  const cps = data.checkpoints || [];
+  if (!cps.length) { list.appendChild(el("div", "side-empty", "belum ada checkpoint")); return; }
+  list.classList.add("cp-list");
+  cps.forEach((cp) => {
+    const item = el("div", "session-item cp-item");
+    item.appendChild(el("span", "cp-hash", cp.hash));
+    item.appendChild(el("div", "cp-msg", cp.message || ""));
+    item.appendChild(el("div", "meta", String(cp.time || "").replace("T", " ").slice(0, 16)));
+    item.title = "Klik untuk rewind ke checkpoint ini";
+    item.onclick = () => askRollback("rewind-to", cp);
+    list.appendChild(item);
+  });
+}
+
+// ── rollback (destructive) → confirm modal ─────────────────
+function askRollback(kind, cp) {
+  const modal = $("confirm-modal");
+  const title = $("confirm-title");
+  const body = $("confirm-body");
+  let action = null;
+  if (kind === "rewind") {
+    title.textContent = "⟲ Rewind workspace?";
+    body.textContent = "Menggulung workspace N checkpoint ke belakang. Perubahan yang ditinggalkan tetap tersimpan (bisa di-Redo). Lanjutkan?";
+    action = async () => {
+      const steps = parseInt($("confirm-steps").value, 10) || 1;
+      const r = await post("/api/rewind", { steps });
+      if (!r.ok) bubble("error", "Rewind gagal — " + (r.error || ""));
+    };
+    $("confirm-steps-wrap").classList.remove("hidden");
+    $("confirm-steps").value = "1";
+  } else if (kind === "undo") {
+    title.textContent = "↩ Undo perubahan terakhir?";
+    body.textContent = "Membatalkan perubahan workspace terakhir. State yang ditinggalkan tetap tersimpan dan bisa di-Redo.";
+    $("confirm-steps-wrap").classList.add("hidden");
+    action = async () => {
+      const r = await post("/api/undo", {});
+      if (!r.ok) bubble("error", "Undo gagal — " + (r.error || ""));
+    };
+  } else if (kind === "redo") {
+    title.textContent = "↪ Redo yang di-undo?";
+    body.textContent = "Mengembalikan state yang terakhir di-undo. State sejak itu tetap ada di timeline (bisa di-Rewind).";
+    $("confirm-steps-wrap").classList.add("hidden");
+    action = async () => {
+      const r = await post("/api/redo", {});
+      if (!r.ok) bubble("error", "Redo gagal — " + (r.error || ""));
+    };
+  } else { // rewind-to: klik entri checkpoint
+    title.textContent = "⟲ Rewind ke " + cp.hash + "?";
+    body.textContent = "Workspace digulung ke checkpoint ini: \"" + (cp.message || "") + "\". State yang ditinggalkan tetap tersimpan (bisa di-Redo).";
+    $("confirm-steps-wrap").classList.add("hidden");
+    action = async () => {
+      const idx = ((state.cps && state.cps.checkpoints) || []).findIndex((c) => c.hash === cp.hash);
+      const steps = idx > 0 ? idx : 1;
+      const r = await post("/api/rewind", { steps });
+      if (!r.ok) bubble("error", "Rewind gagal — " + (r.error || ""));
+    };
+  }
+  modal.classList.remove("hidden");
+  $("confirm-ok").onclick = async () => {
+    modal.classList.add("hidden");
+    if (action) await action();
+  };
+  $("confirm-cancel").onclick = () => modal.classList.add("hidden");
+}
+
 
 // ── approval modal ─────────────────────────────────────────
 let approvalId = null;
@@ -235,6 +354,68 @@ function sendInput() {
   $("autocomplete").classList.add("hidden");
   bubble("user", text);
   post("/api/send", { text });
+}
+
+
+// ── topbar: health badge / diff / stats / export ───────────
+async function refreshHealthBadge() {
+  try {
+    const data = await api("/api/health");
+    state.health = data;
+    const ok = !!data.all_ok;
+    const badge = $("health-badge");
+    badge.classList.toggle("healthy", ok);
+    badge.classList.toggle("unhealthy", !ok);
+    badge.title = ok ? "Semua pemeriksaan kesehatan OK" : "Ada masalah — klik untuk detail";
+    $("health-text").textContent = ok ? "sehat" : "periksa";
+  } catch (e) { /* cosmetic */ }
+}
+function paintHealthPanel() {
+  const data = state.health || {};
+  const results = data.results || [];
+  const lines = results.map((r) => (r.ok ? "✓ " : "✗ ") + r.name + (r.detail ? " — " + r.detail : ""));
+  openInfoPanel("Health", results.length
+    ? (data.all_ok ? "Semua OK\n\n" : "Ada masalah:\n\n") + lines.join("\n")
+    : "Belum ada data kesehatan.");
+}
+async function openDiffPanel() {
+  const data = await api("/api/diff");
+  const diff = data.diff || "";
+  openInfoPanel("Diff", diff ? diff : "Tidak ada perubahan sejak checkpoint terakhir — workspace bersih.");
+}
+async function openStatsPanel() {
+  const data = await api("/api/stats");
+  const s = (data && data.stats) || {};
+  const t = s.totals || {};
+  const lines = [
+    "Total (" + ((s.sessions || []).length) + " sesi terakhir):",
+    "  prompt     : " + (t.prompt_tokens || 0).toLocaleString() + " token",
+    "  completion : " + (t.completion_tokens || 0).toLocaleString() + " token",
+    "  total      : " + (t.total_tokens || 0).toLocaleString() + " token",
+    "  estimasi biaya: $" + Number(t.cost_usd || 0).toFixed(2),
+    "",
+    "Sesi teratas:",
+  ];
+  (s.sessions || []).slice(0, 10).forEach((x) => {
+    lines.push("  " + String(x.title || x.id || "?").slice(0, 40) + " — "
+      + (x.total_tokens || 0).toLocaleString() + " token ($" + Number(x.cost_usd || 0).toFixed(2) + ")");
+  });
+  openInfoPanel("Stats", lines.join("\n"));
+}
+async function doExport() {
+  const r = await api("/api/export?fmt=md");
+  if (r.ok) bubble("success", "Export OK — " + (r.message || r.path || ""));
+  else bubble("warn", "Export gagal — " + (r.error || "tidak diketahui"));
+}
+// generic info panel over the chat
+function openInfoPanel(title, text) {
+  state.streamEl = null;
+  const m = el("div", "message msg-table");
+  m.appendChild(el("div", "tbl-title", title));
+  const pre = el("pre", null, text);
+  m.appendChild(pre);
+  $("messages").appendChild(m);
+  scrollChat();
 }
 
 
@@ -423,6 +604,7 @@ async function boot() {
   connectEvents();
   await refreshState();
   await refreshSessions();
+  refreshHealthBadge();
   $("btn-new").onclick = async () => { await post("/api/sessions", { action: "new" }); await refreshState(); };
   $("mode-plan").onclick = () => post("/api/mode", { mode: "plan" });
   $("mode-build").onclick = () => post("/api/mode", { mode: "build" });
@@ -435,5 +617,16 @@ async function boot() {
   $("approve-deny").onclick = () => answerApproval(false, false);
   $("send").onclick = sendInput;
   $("input").addEventListener("keydown", handleInputKeydown);
+  // desktop foundations (v0.3.3)
+  ["sessions", "files", "todos", "cp"].forEach((t) => {
+    $("stab-" + t).onclick = () => setSideTab(t);
+  });
+  $("btn-undo").onclick = () => askRollback("undo");
+  $("btn-redo").onclick = () => askRollback("redo");
+  $("btn-rewind").onclick = () => askRollback("rewind");
+  $("health-badge").onclick = () => { refreshHealthBadge().then(paintHealthPanel); };
+  $("btn-diff").onclick = openDiffPanel;
+  $("btn-stats").onclick = openStatsPanel;
+  $("btn-export").onclick = doExport;
 }
 boot();

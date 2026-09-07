@@ -20,9 +20,20 @@
     </div>
     <div class="provider-chip" id="provider-chip" title="Click to change model">–</div>
     <button id="btn-new" class="side-action">+ Sesi Baru</button>
-    <div class="side-label">Riwayat Sesi</div>
+    <div class="side-tabs">
+      <button id="stab-sessions" class="stab active" title="Riwayat sesi">Sesi</button>
+      <button id="stab-files" class="stab" title="File di workspace">Files</button>
+      <button id="stab-todos" class="stab" title="Papan todo agen">Todos</button>
+      <button id="stab-cp" class="stab" title="Checkpoint workspace">Cekpoin</button>
+    </div>
     <div id="session-list" class="session-list"></div>
     <div class="side-footer">
+      <div class="side-label">Kontrol Checkpoint</div>
+      <div class="cp-controls">
+        <button id="btn-undo" class="cp-btn" title="Batalkan perubahan workspace terakhir">↩ Undo</button>
+        <button id="btn-redo" class="cp-btn" title="Kembalikan yang di-undo">↪ Redo</button>
+        <button id="btn-rewind" class="cp-btn" title="Gulung N checkpoint ke belakang">⟲ Rewind</button>
+      </div>
       <button id="btn-settings" class="side-action ghost" title="Settings Center">⚙ Settings</button>
       <div id="usage-footer" class="usage-footer">–</div>
     </div>
@@ -31,7 +42,13 @@
   <main id="main">
     <header id="topbar">
       <div id="chat-title">Percakapan baru</div>
-      <div id="running-indicator" class="running hidden" title="Klik untuk stop">● berjalan</div>
+      <div class="top-actions">
+        <div id="health-badge" title="Kesehatan instalasi — klik untuk detail (doctor/status)"><span class="dot"></span><span id="health-text">…</span></div>
+        <button id="btn-diff" class="top-btn" title="Diff workspace sejak checkpoint terakhir">± Diff</button>
+        <button id="btn-stats" class="top-btn" title="Statistik token &amp; biaya">📊 Stats</button>
+        <button id="btn-export" class="top-btn" title="Export sesi aktif (md/html)">⬇ Export</button>
+        <div id="running-indicator" class="running hidden" title="Klik untuk stop">● berjalan</div>
+      </div>
     </header>
 
     <div id="chat" aria-live="polite">
@@ -51,6 +68,18 @@
           <button id="approve-deny" class="danger">Tolak</button>
           <button id="approve-allow" class="primary">Izinkan</button>
           <button id="approve-always" class="primary ghost">Selalu izinkan sesi ini</button>
+        </div>
+      </div>
+      <div id="confirm-modal" class="hidden">
+        <div class="approval-title" id="confirm-title">?</div>
+        <pre id="confirm-body" class="approval-summary"></pre>
+        <div class="form-row hidden" id="confirm-steps-wrap">
+          <label>Jumlah checkpoint</label>
+          <input type="number" id="confirm-steps" min="1" max="100" value="1">
+        </div>
+        <div class="approval-actions">
+          <button id="confirm-cancel" class="danger">Batal</button>
+          <button id="confirm-ok" class="primary">Ya, lanjutkan</button>
         </div>
       </div>
       <div id="composer">
