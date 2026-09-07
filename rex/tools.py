@@ -52,7 +52,19 @@ def _target(path: str) -> Optional[Path]:
 
 
 def _is_sensitive(target: Optional[Path]) -> bool:
-    return target is None or target.name.lower() in SENSITIVE_FILENAMES or target.suffix.lower() in SENSITIVE_SUFFIXES
+    if target is None or target.name.lower() in SENSITIVE_FILENAMES or target.suffix.lower() in SENSITIVE_SUFFIXES:
+        return True
+    # RexWorker delegation is active: writes are hard-scoped to workspace/.
+    try:
+        from rex.worker import is_worker_active, WORKER_WRITE_ROOT
+        if is_worker_active() and target is not None:
+            resolved = target.resolve()
+            root = WORKER_WRITE_ROOT.resolve()
+            if not resolved.is_relative_to(root):
+                return True
+    except Exception:
+        pass
+    return False
 
 def read_file(path: str, offset: int = 0, limit: int = 0) -> str:
     """Membaca isi file di dalam workspace.
@@ -749,6 +761,16 @@ def delegate_to_dilo(task: str, context: str = "") -> str:
     return agent.run(task, context)
 
 
+def delegate_to_worker(task: str, context: str = "") -> str:
+    """
+    Delegasikan implementasi (menulis/mengedit file di workspace/, verifikasi via terminal)
+    ke RexWorker — sub-agent Mode Build dengan tulisan hard-scoped ke workspace/.
+    Hanya berjalan saat Rex berada di Mode Build; lolos approval gate + checkpoint yang sama.
+    """
+    from rex.worker import RexWorker
+    return RexWorker().run(task, context)
+
+
 def apply_patch(patch: str) -> str:
     """
     Terapkan unified diff ke file workspace (Hanya aktif di Mode Build).
@@ -844,6 +866,25 @@ def todo_write(todos: list) -> str:
         f"Todo list diperbarui — {_todos.summary(board)}{note}:\n"
         f"{_todos.format_board(board)}"
     )
+
+
+def memory_write(entry: str) -> str:
+    """
+    Simpan catatan tahan-lama ke memori proyek (.rex/memory.md).
+
+    Catatan di-inject kembali ke context setiap sesi. Gunakan untuk:
+    konvensi yang ditemukan saat bekerja, preferensi user, gotcha teknis,
+    cara menjalankan proyek. Satu catatan per panggilan, satu baris
+    (multiline otomatis digabung). Tidak untuk data sensitif/secret.
+    """
+    from rex.context_inject import append_agent_memory
+    from rex.websearch import redact_secrets
+    try:
+        redacted = redact_secrets(str(entry or ""))
+    except Exception:
+        redacted = str(entry or "")
+    ok, message = append_agent_memory(redacted)
+    return message
 
 
 # Schema definitions for LLM Tool Calling
@@ -1099,6 +1140,20 @@ TOOL_DEFINITIONS = [
         }
     },
     {
+        "name": "delegate_to_worker",
+        "description": ("Delegasikan implementasi (tulis/edit file workspace/ + verifikasi terminal) ke RexWorker "
+                        "(sub-agent Mode Build, tulisan hard-scoped ke workspace/). Hanya aktif saat Mode Build. "
+                        "Cocok untuk tugas implementasi mandiri yang sudah jelas spesifikasinya."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "Tugas implementasi yang spesifik (apa yang ditulis/diubah + bagaimana verifikasinya)"},
+                "context": {"type": "string", "description": "Konteks tambahan: hasil analisis, spesifikasi, atau path file terkait"}
+            },
+            "required": ["task"]
+        }
+    },
+    {
         "name": "apply_patch",
         "description": ("Terapkan unified diff (git diff / diff -u) ke file workspace. "
                         "Lebih presisi daripada edit_file untuk perubahan multi-baris/multi-file. "
@@ -1133,6 +1188,20 @@ TOOL_DEFINITIONS = [
                 }
             },
             "required": ["todos"]
+        }
+    },
+    {
+        "name": "memory_write",
+        "description": ("Simpan catatan tahan-lama ke memori proyek (.rex/memory.md) — dibaca ulang "
+                        "di setiap sesi berikutnya. Gunakan untuk konvensi yang ditemukan, preferensi "
+                        "user, gotcha teknis, dan cara menjalankan proyek. Satu catatan singkat per "
+                        "panggilan. JANGAN simpan secret/token/password — secret otomatis di-redaksi."),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "entry": {"type": "string", "description": "Satu catatan ringkas (satu baris)"}
+            },
+            "required": ["entry"]
         }
     }
 ]
@@ -1182,7 +1251,9 @@ TOOL_REGISTRY = {
     "delegate_to_trike": delegate_to_trike,
     "delegate_to_ptero": delegate_to_ptero,
     "delegate_to_dilo": delegate_to_dilo,
+    "delegate_to_worker": delegate_to_worker,
     "todo_write": todo_write,
+    "memory_write": memory_write,
     "apply_patch": apply_patch,
     "run_command_bg": run_command_bg,
     "task_output": task_output,

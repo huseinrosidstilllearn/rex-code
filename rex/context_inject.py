@@ -45,6 +45,15 @@ MAX_RULE_FILES = 12
 MAX_RULE_FILE_CHARS = 4000
 MAX_RULES_TOTAL_CHARS = 12_000
 
+# Agentic project memory (.rex/memory.md): durable, agent-curated notes
+# (conventions discovered mid-run, user preferences, gotchas). Distinct
+# from REX.md: that one is the USER's instruction file; memory.md is the
+# AGENT's own persistent notes, kept in a fixed structure.
+MEMORY_DIR_PARTS = (".rex",)
+AGENT_MEMORY_FILENAME = "memory.md"
+MAX_AGENT_MEMORY_CHARS = 3000
+MAX_MEMORY_ENTRIES = 200
+
 
 def global_memory_path() -> Path:
     return DATA_DIR / MEMORY_FILENAME
@@ -72,6 +81,62 @@ def read_project_memory(project_root: Optional[Path] = None) -> str:
 
 def read_global_memory() -> str:
     return _read_capped(global_memory_path(), MAX_MEMORY_CHARS)
+
+
+# ── Agentic project memory (.rex/memory.md) ─────────────────────────
+
+
+def agent_memory_path(project_root: Optional[Path] = None) -> Path:
+    root = Path(project_root) if project_root else Path.cwd()
+    return root.joinpath(*MEMORY_DIR_PARTS) / AGENT_MEMORY_FILENAME
+
+
+def read_agent_memory(project_root: Optional[Path] = None) -> str:
+    """The agent's persistent notes for this project, capped. Empty if absent."""
+    return _read_capped(agent_memory_path(project_root), MAX_AGENT_MEMORY_CHARS)
+
+
+def append_agent_memory(entry: str, project_root: Optional[Path] = None) -> Tuple[bool, str]:
+    """
+    Append one durable note (single line recommended) to .rex/memory.md.
+
+    Notes are deduplicated (identical text is not stored twice), capped
+    at MAX_MEMORY_ENTRIES entries, and the file is capped at
+    MAX_AGENT_MEMORY_CHARS (oldest entries drop off). Never raises:
+    returns (ok, message).
+    """
+    text = str(entry or "").strip()
+    if not text:
+        return False, "Catatan kosong — tidak ada yang disimpan."
+    # One entry per line; collapse internal newlines into a single line.
+    text = " ".join(text.split())
+    if len(text) > 400:
+        text = text[:400] + "…"
+    path = agent_memory_path(project_root)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        existing: List[str] = []
+        if path.exists():
+            existing = [
+                line.strip() for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
+                if line.strip()
+            ]
+        if text in existing:
+            return False, "Catatan sudah ada di memori — tidak diduplikasi."
+        existing.append(text)
+        overflow = max(0, len(existing) - MAX_MEMORY_ENTRIES)
+        if overflow:
+            existing = existing[overflow:]
+        content = "\n".join(existing)
+        if len(content) > MAX_AGENT_MEMORY_CHARS:
+            # Drop oldest lines until the file fits the cap.
+            while existing and len("\n".join(existing)) > MAX_AGENT_MEMORY_CHARS:
+                existing.pop(0)
+            content = "\n".join(existing)
+        path.write_text(content + "\n", encoding="utf-8")
+        return True, f"Catatan disimpan di {path}"
+    except OSError as exc:
+        return False, f"Gagal menulis memori: {exc}"
 
 
 def create_rex_md(project_root: Optional[Path] = None) -> Tuple[bool, Path]:
@@ -243,6 +308,17 @@ def build_context_prefix(mode: str = "") -> str:
                 blocks.append(f"=== Project Instructions (REX.md) ===\n{project}")
             elif global_mem:
                 blocks.append(f"=== Global Instructions (REX.md global) ===\n{global_mem}")
+        # Agentic memory: the agent's own durable notes for this project.
+        # Toggled together with project_memory; disabled by default can be
+        # set via context.agent_memory=false.
+        if settings.get("agent_memory", True):
+            notes = read_agent_memory()
+            if notes:
+                blocks.append(
+                    "=== Memori Proyek (.rex/memory.md — catatan Anda sendiri dari sesi sebelumnya) ===\n"
+                    f"{notes}\n"
+                    "(Patuhi catatan ini; tambahkan temuan penting baru dengan tool memory_write.)"
+                )
 
     if settings.get("rules", True):
         rule_pairs = collect_rules()

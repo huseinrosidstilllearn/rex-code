@@ -157,6 +157,55 @@ def main():
     for keyword in ["Baca sebelum mengedit", "apply_patch", "Verifikasi sebelum klaim selesai", "todo_write"]:
         check(f"prompt mentions: {keyword}", keyword in BUILD_MODE_PROMPT)
 
+    # ── 7. Agentic project memory (.rex/memory.md) ──────────────────────
+    import tempfile as _tf
+    from pathlib import Path as _P
+    from rex.context_inject import agent_memory_path, append_agent_memory, read_agent_memory
+    from rex.tools import memory_write
+    from rex.config import WORKSPACE_DIR
+
+    with _tf.TemporaryDirectory() as tmp:
+        root = _P(tmp)
+        ok1, _ = append_agent_memory("Konvensi: pesan commit Bahasa Indonesia", root)
+        dup_ok, _ = append_agent_memory("Konvensi: pesan commit Bahasa Indonesia", root)
+        blank_ok, _ = append_agent_memory("   ", root)
+        check("memory append works", ok1 and read_agent_memory(root).startswith("Konvensi:"))
+        check("memory dedups identical entries", not dup_ok)
+        check("memory rejects empty entry", not blank_ok)
+        check("memory lives in .rex/memory.md", agent_memory_path(root).relative_to(root).as_posix() == ".rex/memory.md")
+
+    # memory_write redacts secrets before persisting
+    from unittest.mock import patch as _patch
+    with _tf.TemporaryDirectory() as tmp:
+        with _patch("rex.context_inject.Path.cwd", lambda: _P(tmp)):
+            result = memory_write("api_key=abcdefghijklmnopqrstuvwxyz123456")
+            stored = read_agent_memory(_P(tmp))
+            check("memory_write redacts secret", "REDACTED" in stored and "abcdefghijklmnopqrstuvwxyz" not in stored)
+
+    # ── 8. RexWorker: build-mode gate + workspace-scoped writes ────────
+    from rex.worker import RexWorker, is_worker_active
+    from rex.tools import _is_sensitive
+    import rex.worker as worker_mod
+    from rex.config import get_active_mode as _get_mode
+
+    check("no worker active by default", not is_worker_active())
+    with _patch("rex.worker.get_active_mode", return_value="plan"), \
+         _patch("rex.core.RexAgent") as _mock_agent:
+        refused = RexWorker().run("tulis sesuatu")
+        _mock_agent.assert_not_called()
+    check("worker refused in plan mode", "DITOLAK" in refused or "Mode Build" in refused)
+
+    # Scope enforcement: while a worker is active, paths outside workspace/
+    # are treated as sensitive (blocked) by the tool layer.
+    worker_mod._active_workers = 1
+    try:
+        check("worker: in-workspace path allowed", not _is_sensitive(WORKSPACE_DIR / "x.txt"))
+        check("worker: project config blocked", _is_sensitive(WORKSPACE_DIR.parent / "config.json"))
+        check("worker: workflows blocked", _is_sensitive(WORKSPACE_DIR.parent / "workflows" / "f.json"))
+    finally:
+        worker_mod._active_workers = 0
+    check("worker scope lifted after run", not _is_sensitive(WORKSPACE_DIR / "x.txt"))
+
     print("\nAgentic guard checks ALL PASS")
 
 

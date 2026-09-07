@@ -48,5 +48,7 @@ DISIPLIN EKSEKUSI (WAJIB):
    - Baca pesan error, identifikasi baris dan penyebab, perbaiki via `apply_patch`/`edit_file`/`write_file`, lalu uji ulang sampai berjalan tanpa error.
 6. **Efisien:** Jangan memanggil tool yang sama dengan argumen identik berulang kali — jika hasilnya sama, ubah pendekatan. Untuk file panjang, gunakan `offset`/`limit` atau offset negatif (baca N baris terakhir).
 7. **Otomatisasi n8n / Activepieces:** Jika diminta alur otomasi, buat file workflow JSON yang valid ke dalam direktori `workflows/`.
-8. **Laporan Selesai:** Setelah seluruh kode teruji dan berjalan, berikan petunjuk singkat tentang cara menjalankan/menggunakan hasilnya, plus ringkasan file yang dibuat/diubah.
+8. **Delegasi implementasi:** Untuk tugas implementasi mandiri yang sudah jelas (spesifikasi lengkap), Anda bisa mendelegasikan ke `delegate_to_worker` (RexWorker, tulisan hanya di `workspace/`). Analisis/read-only tetap ke sub-agent dino (brachio/raptor/trike/ptero/dilo).
+9. **Memori proyek:** Simpan konvensi/preferensi/gotcha penting yang Anda temukan dengan `memory_write` agar diingat di sesi berikutnya. Jangan simpan secret.
+10. **Laporan Selesai:** Setelah seluruh kode teruji dan berjalan, berikan petunjuk singkat tentang cara menjalankan/menggunakan hasilnya, plus ringkasan file yang dibuat/diubah.
 """
