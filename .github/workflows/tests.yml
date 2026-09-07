@@ -1,14 +1,14 @@
 name: Tests
 
-# Quality gate: the full 43-suite local harness runs on every push to main
+# Quality gate: the full 43-suite local harness runs on every push to master
 # and every pull request, so a broken module can never reach a release tag.
 # (Before this workflow, only test_packaging.py ran in CI — during releases.)
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
-    branches: [main]
+    branches: [master]
   workflow_dispatch:
 
 permissions:
