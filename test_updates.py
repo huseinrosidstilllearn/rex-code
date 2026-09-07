@@ -73,7 +73,7 @@ def main():
     check("v0.2.0 > 0.1.0 (prefix v)", compare_versions("v0.2.0", "0.1.0") == 1)
     check("0.1.0-beta == 0.1.0 (suffix)", compare_versions("0.1.0-beta", "0.1.0") == 0)
     check("0.10.0 > 0.9.0 (numeric, not lexical)", compare_versions("0.10.0", "0.9.0") == 1)
-    check("current __version__ is 0.3.0", rex.__version__ == "0.3.0")
+    check("current __version__ is 0.3.1", rex.__version__ == "0.3.1")
 
     # ── 2. GitHub release fetch (mocked, never raises) ───────────────
     with patch.object(updates.httpx, "get", return_value=fake_response(200, RELEASE_NEWER)):
@@ -268,7 +268,7 @@ def main():
 
     # ── 9. Version centralization across the repo ────────────────────
     iss = Path("installer/windows/rexcode.iss").read_text(encoding="utf-8")
-    check("installer default version 0.3.0", '#define AppVersion "0.3.0"' in iss)
+    check("installer default version 0.3.1", '#define AppVersion "0.3.1"' in iss)
     tui = Path("rex/tui/app.py").read_text(encoding="utf-8")
     check("TUI banner uses __version__ (no hardcoded 1.0.0)", 'Rex Code v{rex.__version__}' in tui and "v1.0.0" not in tui)
     cli_src = Path("cli.py").read_text(encoding="utf-8")

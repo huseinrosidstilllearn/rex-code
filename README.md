@@ -9,7 +9,7 @@
 You think it, Rex builds it. PLAN before you act, BUILD when you approve —
 with a sandboxed tool layer, sub-agent specialists, and one-click installer.
 
-[![Release](https://img.shields.io/badge/Release-v0.3.0-22C55E?logo=github)](https://github.com/huseinrosidstilllearn/rex-code/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v0.3.1-22C55E?logo=github)](https://github.com/huseinrosidstilllearn/rex-code/releases/latest)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](#-from-source)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?logo=windows)](#-from-source)
 [![License](https://img.shields.io/badge/License-MIT-8B5CF6)](LICENSE)
@@ -22,7 +22,7 @@ with a sandboxed tool layer, sub-agent specialists, and one-click installer.
 
 ## 🚀 Quick Install (Windows)
 
-1. Download **`RexCode-Setup-v0.3.0-x64.exe`** from [Releases](https://github.com/huseinrosidstilllearn/rex-code/releases/latest).
+1. Download **`RexCode-Setup-v0.3.1-x64.exe`** from [Releases](https://github.com/huseinrosidstilllearn/rex-code/releases/latest).
 2. Run it — if SmartScreen appears: **More info → Run anyway** (normal for unsigned open-source apps; see [guide](PANDUAN-INSTALL.md)).
 3. Follow the wizard (EN/🇮🇩), then launch **Rex Code** from the Start Menu.
 4. First run: put `GEMINI_API_KEY=...` in `%LOCALAPPDATA%\RexCode\.env` ([free key](https://aistudio.google.com)) — Rex shows you exactly where when it starts.
@@ -86,7 +86,8 @@ copy .env.example .env        # fill GEMINI_API_KEY
 start_cli.bat                 # or: python cli.py
 ```
 
-Native TUI: `python rex/tui/cli_entry.py` · Classic CLI: `python cli.py`
+Rex Desktop (default): `python cli.py` opens the app window.
+Browser mode: `python cli.py --web` · Native TUI: `python rex/tui/cli_entry.py` · Classic CLI: `python cli.py --tui`
 
 ---
 
@@ -269,8 +270,8 @@ python -m rex.webhost --host 0.0.0.0 --port 9000   # custom bind (use a TLS prox
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  Native TUI (rex/tui)        Classic CLI (cli.py)        │
-│       Webhook host (rex/webhost.py)                      │
+│  Rex Desktop (rex/desktop)   Native TUI (rex/tui)         │
+│  Classic CLI (cli.py)        Webhook host (rex/webhost.py)│
 │            ↘                    ↙                         │
 │      RexAgent.run() — ReAct loop + StepEvent callbacks   │
 │            ↓                                              │
@@ -383,10 +384,12 @@ A green run means it is safe to push.
 - [x] **Skills on-demand** — drop `<name>/SKILL.md` (front-matter + instructions) into `.rex/skills/`: a compact listing joins the system prompt, the model loads the full body on demand via the `load_skill` tool, or you run it directly with `/skill <name> [args]` (`/skills` to list)
 - [x] **Parallel delegates via git worktrees** — `delegate_parallel` runs up to 3 sub-agents concurrently, each in its own isolated worktree as a headless Rex child (writes only touch the copy); the worktree is removed afterwards and its diff is returned for review — applying it goes through `apply_patch`'s approval gate + checkpoint
 - [x] **Plugins API v2** — optional `plugin.toml` manifest per plugin (name, version, description, explicit `permissions` from `net|shell|fs|env`); `plugins.blocked_permissions` in config fail-closes any plugin declaring a blocked permission; `/plugins` renders the installed table with version, permissions and status; manifest-less plugins keep loading as legacy
+- [x] **Rex Desktop (front utama)** — `rex` tanpa argumen membuka jendela aplikasi native (WebView2): server lokal stdlib + SPA (~415 baris vanilla JS: SSE streaming, sidebar, approval modal, `@file` autocomplete); `--web` membuka mode browser; `--tui`/`--cli` tetap tersedia
+- [x] **Settings Center** — UI terpadu di Desktop untuk seluruh pengaturan (mode, budget, max steps, streaming, anti-slop, timeout, history) + provider CRUD + test connection + onboarding; API key hanya masuk vault `.env` (chmod 600), tidak pernah ke `config.json`
+- [x] **CLI interaktif prompt_toolkit** — REPL `--tui`/`--cli` kini punya riwayat input persisten (`cli_history`), autocomplete slash-command (~30 perintah), fallback mulus tanpa prompt_toolkit; stdout/stderr dipaksa UTF-8 di Windows
 
 **Next — polish for the v0.3.x line (prioritized)**
 
-- [ ] **Onboarding wizard** — first-run flow: pick provider → paste key → test → write `.env` (mode 600)
 - [ ] **i18n UI (EN/ID)** — `/lang` switch backed by `rex/i18n.py`
 - [ ] **Version resource + provenance** — `rex.exe` file metadata + build provenance attestation in `release.yml`
 - [ ] **Code signing** — kill SmartScreen warnings for good (SignPath Foundation, in application)
