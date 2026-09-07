@@ -45,7 +45,9 @@ def main():
 
         # ── 2. Image @file → attachment ──────────────────────────────────
         prompt, images, notes = extract_references("lihat @shot.png", base_dir=ws)
-        check("image attached", images == [ws / "shot.png"])
+        # compare resolved paths: CI runners hand out 8.3 short TEMP paths
+        # (C:\Users\RUNNER~1\...) while .resolve() canonicalizes to the long form
+        check("image attached", images == [(ws / "shot.png").resolve()])
         check("image not inlined as text", not any("PNG" in n for n in notes))
 
         # ── 3. Sensitive + missing + binary ──────────────────────────────

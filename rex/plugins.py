@@ -52,7 +52,7 @@ import importlib.util
 import re
 import sys
 from pathlib import Path
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from rex.approval import request_approval
 from rex.config import PLUGINS_DIR, load_config, normalize_config

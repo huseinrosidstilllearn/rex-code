@@ -12,7 +12,27 @@ permissions:
   contents: write
 
 jobs:
+  harness:
+    # Quality gate: a release can never build on a red harness.
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run full check harness
+        run: python run_all_checks.py
+
   windows-installer:
+    needs: harness
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -61,6 +81,7 @@ jobs:
           body_path: RELEASE_NOTES.md
 
   linux-macos:
+    needs: harness
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]

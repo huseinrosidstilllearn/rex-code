@@ -51,12 +51,23 @@ core yang sudah teruji — tanpa logika baru:
 
 ## 🔧 Perbaikan
 
+- **CRITICAL: `rex/plugins.py` crash di Python ≤3.13** — `Optional` dipakai di
+  signature `read_manifest`/`_manifest_meta`/`install_plugin_from_git` tanpa
+  pernah diimpor. Di Python 3.14 (PEP 649) annotation dievaluasi lazy sehingga
+  tersembunyi saat develop; di runtime installer (3.12) dievaluasi eager →
+  `NameError` saat import `rex.core` → aplikasi gagal memuat chat. Bug ini
+  juga ada di installer v0.3.1/v0.3.2 — pengguna exe disarankan update ke
+  0.3.3. Ditemukan oleh workflow `tests.yml` baru (CI Python 3.12) pada run
+  pertamanya — persis celah yang sprint ini tutup
 - **`app.js` syntax corruption** — ekor `paintProviderEditor`/
   `paintProvidersTab` (Settings Center) dari sesi develop sebelumnya
   tercecer di top-level setelah `boot()` → SyntaxError, SPA tidak bisa
   dimuat sama sekali. Sudah dipulihkan (`node --check` bersih)
 - **Bug validasi rewind** — `steps=0` lolos validasi (`0 or 1` → 1) dan
   memicu rewind asli; tertangkap oleh test baru sebelum merugikan user
+- **test_vision di CI** — perbandingan path image kini memakai `.resolve()`:
+  runner CI menyerahkan TEMP path 8.3 pendek (`C:\Users\RUNNER~1\...`)
+  sementara `extract_references` mengkanonikalisasi ke bentuk panjang
 - `test_desktop.py` diperluas: smoke test seluruh 10 endpoint + validasi
   input; core destruktif (rewind/undo/redo/export) di-mock agar test
   tidak pernah menyentuh shadow-history workspace user
