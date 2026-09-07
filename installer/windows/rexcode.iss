@@ -1,7 +1,7 @@
-﻿; Inno Setup script â€” Rex Code Windows installer
+; Inno Setup script â€” Rex Code Windows installer
 ;
 ; Compile with the ISCC shipped with Inno Setup 6:
-;     iscc installer\\windows\\rexcode.iss /DAppVersion=0.3.2
+;     iscc installer\\windows\\rexcode.iss /DAppVersion=0.3.3
 ;
 ; Version is passed on the command line (single source of truth:
 ; rex/__init__.py __version__). The build script does this automatically.
@@ -9,7 +9,7 @@
 #define AppName "Rex Code"
 #define AppExeName "rex.exe"
 #ifndef AppVersion
-#define AppVersion "0.3.2"
+#define AppVersion "0.3.3"
 #endif
 
 [Setup]

@@ -9,7 +9,7 @@
 You think it, Rex builds it. PLAN before you act, BUILD when you approve —
 with a sandboxed tool layer, sub-agent specialists, and one-click installer.
 
-[![Release](https://img.shields.io/badge/Release-v0.3.1-22C55E?logo=github)](https://github.com/huseinrosidstilllearn/rex-code/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v0.3.3-22C55E?logo=github)](https://github.com/huseinrosidstilllearn/rex-code/releases/latest)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](#-from-source)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-0078D4?logo=windows)](#-from-source)
 [![License](https://img.shields.io/badge/License-MIT-8B5CF6)](LICENSE)
@@ -22,7 +22,7 @@ with a sandboxed tool layer, sub-agent specialists, and one-click installer.
 
 ## 🚀 Quick Install (Windows)
 
-1. Download **`RexCode-Setup-v0.3.1-x64.exe`** from [Releases](https://github.com/huseinrosidstilllearn/rex-code/releases/latest).
+1. Download **`RexCode-Setup-v0.3.3-x64.exe`** from [Releases](https://github.com/huseinrosidstilllearn/rex-code/releases/latest).
 2. Run it — if SmartScreen appears: **More info → Run anyway** (normal for unsigned open-source apps; see [guide](PANDUAN-INSTALL.md)).
 3. Follow the wizard (EN/🇮🇩), then launch **Rex Code** from the Start Menu.
 4. First run: put `GEMINI_API_KEY=...` in `%LOCALAPPDATA%\RexCode\.env` ([free key](https://aistudio.google.com)) — Rex shows you exactly where when it starts.
@@ -387,6 +387,9 @@ A green run means it is safe to push.
 - [x] **Rex Desktop (front utama)** — `rex` tanpa argumen membuka jendela aplikasi native (WebView2): server lokal stdlib + SPA (~415 baris vanilla JS: SSE streaming, sidebar, approval modal, `@file` autocomplete); `--web` membuka mode browser; `--tui`/`--cli` tetap tersedia
 - [x] **Settings Center** — UI terpadu di Desktop untuk seluruh pengaturan (mode, budget, max steps, streaming, anti-slop, timeout, history) + provider CRUD + test connection + onboarding; API key hanya masuk vault `.env` (chmod 600), tidak pernah ke `config.json`
 - [x] **CLI interaktif prompt_toolkit** — REPL `--tui`/`--cli` kini punya riwayat input persisten (`cli_history`), autocomplete slash-command (~30 perintah), fallback mulus tanpa prompt_toolkit; stdout/stderr dipaksa UTF-8 di Windows
+- [x] **CI full harness** — `tests.yml` menjalankan seluruh 43 suite self-check pada setiap push/PR ke master (runner sama dengan pipeline release); `run_all_checks.py` kini ber-timeout per-suite (300s), lanjut saat ada suite gagal, dan ringkasan akhir + exit code CI-friendly
+- [x] **Desktop Foundations (API)** — 10 endpoint baru di `rex/desktop/server.py`: checkpoints, rewind/undo/redo (validasi input 400), todos, diff, health, export md/html, stats — semuanya never-raise, tanpa dependency baru, siap untuk SPA sekarang maupun frontend lain di masa depan
+- [x] **Desktop Foundations (UI)** — SPA wiring: sidebar tabs Sesi/Files/Todos/Cekpoin, kontrol checkpoint (Undo/Redo/Rewind dengan modal konfirmasi — aksi destruktif selalu melalui gerbang persetujuan), health badge di topbar, panel Diff & Stats, tombol Export
 
 **Next — polish for the v0.3.x line (prioritized)**
 
