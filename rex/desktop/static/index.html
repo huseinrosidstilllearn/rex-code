@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rex Desktop</title>
+<link rel="stylesheet" href="app.css">
+<link rel="icon" href="rex.svg" type="image/svg+xml">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand">
+      <img src="rex.svg" alt="Rex" class="brand-icon">
+      <span class="brand-name">Rex</span>
+    </div>
+    <div class="mode-switch">
+      <button id="mode-plan" class="mode-btn" title="Read-only analysis">PLAN</button>
+      <button id="mode-build" class="mode-btn" title="Autonomous execution">BUILD</button>
+    </div>
+    <div class="provider-chip" id="provider-chip" title="Click to change model">–</div>
+    <button id="btn-new" class="side-action">+ Sesi Baru</button>
+    <div class="side-label">Riwayat Sesi</div>
+    <div id="session-list" class="session-list"></div>
+    <div class="side-footer">
+      <button id="btn-settings" class="side-action ghost" title="Settings Center">⚙ Settings</button>
+      <div id="usage-footer" class="usage-footer">–</div>
+    </div>
+  </aside>
+
+  <main id="main">
+    <header id="topbar">
+      <div id="chat-title">Percakapan baru</div>
+      <div id="running-indicator" class="running hidden" title="Klik untuk stop">● berjalan</div>
+    </header>
+
+    <div id="chat" aria-live="polite">
+      <div id="messages"></div>
+    </div>
+
+    <div id="todo-panel" class="hidden">
+      <div class="todo-head">Todos <button id="todo-close">×</button></div>
+      <ol id="todo-list"></ol>
+    </div>
+
+    <footer id="composer-wrap">
+      <div id="approval-modal" class="hidden">
+        <div class="approval-title" id="approval-action">Aksi</div>
+        <pre id="approval-summary" class="approval-summary"></pre>
+        <div class="approval-actions">
+          <button id="approve-deny" class="danger">Tolak</button>
+          <button id="approve-allow" class="primary">Izinkan</button>
+          <button id="approve-always" class="primary ghost">Selalu izinkan sesi ini</button>
+        </div>
+      </div>
+      <div id="composer">
+        <textarea id="input" rows="2" placeholder="Tanya apa saja… (@file untuk lampir file, / untuk perintah)"></textarea>
+        <button id="send" title="Kirim (Enter)"></button>
+        <div id="autocomplete" class="hidden"></div>
+      </div>
+      <div class="composer-hint">Enter kirim · Shift+Enter baris baru · esc tutup autocomplete</div>
+    </footer>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

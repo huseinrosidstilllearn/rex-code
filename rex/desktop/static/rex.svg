@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Rex brand: stylized dino head -->
+  <rect width="64" height="64" rx="14" fill="#0d1117"/>
+  <path fill="#22C55E" d="M14 30c0-2 1-4 3-5l6-9c1-2 3-3 5-3h10c2 0 4 1 5 3l6 9c2 1 3 3 3 5v8c0 2-1 4-3 5l-6 5c-1 1-3 1-4 0l-3-2c-1-1-1-2 0-3l2-1v-9l-4-6h-8l-4 6v9l2 1c1 1 1 2 0 3l-3 2c-1 1-3 1-4 0l-6-5c-2-1-3-3-3-5z"/>
+  <circle cx="26" cy="26" r="2.5" fill="#0d1117"/>
+  <circle cx="40" cy="26" r="2.5" fill="#0d1117"/>
+  <path fill="#22C55E" d="M10 14l4-8 4 8-4 3z"/>
+</svg>

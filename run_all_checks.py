@@ -47,6 +47,7 @@ CHECKS = [
     "test_export.py",
     "test_skills.py",
     "test_app_controller.py",
+    "test_desktop.py",
 ]
 
 

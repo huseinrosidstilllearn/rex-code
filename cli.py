@@ -418,12 +418,27 @@ def main():
     parser.add_argument("--yolo", action="store_true", help="Headless: izinkan aksi destruktif tanpa konfirmasi (default: TOLAK semua)")
     parser.add_argument("--serve-webhook", action="store_true",
                         help="Jalankan HTTP host receiver webhook GitHub (lihat rex.webhost), lalu keluar")
+    parser.add_argument("--tui", action="store_true", help="Paksa UI terminal rich (perilaku lama)")
+    parser.add_argument("--cli", action="store_true", help="Paksa UI terminal rich (alias --tui)")
+    parser.add_argument("--web", action="store_true",
+                        help="Buka UI Desktop di tab browser (server lokal tetap jalan)")
     parser.add_argument("--version", action="version", version=f"Rex Code v{__version__}")
     args = parser.parse_args()
 
     if args.serve_webhook:
         from rex.webhost import run_webhost
         run_webhost()
+        return
+
+    # Desktop-first dispatch: no args (interactive) → Rex Desktop window.
+    if args.prompt is None and not (args.tui or args.cli or args.web):
+        from rex.desktop.server import serve as serve_desktop
+        serve_desktop(open_window=True)
+        return
+
+    if args.web:
+        from rex.desktop.server import serve as serve_desktop
+        serve_desktop(open_window=True, browser=True)
         return
 
     if args.prompt is not None:

@@ -25,6 +25,11 @@ hiddenimports = [
     "google.genai",
     "google.genai.types",
     "openai",
+    # Desktop UI (stdlib server + window; static assets via datas below)
+    "rex.desktop",
+    "rex.desktop.server",
+    "rex.desktop.window",
+    "rex.desktop.settings_api",
     # TUI
     "textual",
     "textual.app",
@@ -51,6 +56,12 @@ datas = [
     # sys._MEIPASS / rex / config.json
     (str(PROJECT_ROOT / "config.json"), "rex"),
 ]
+
+# Rex Desktop static SPA (index.html / app.css / app.js / rex.svg).
+# Served by rex.desktop.server from the bundled copy in _MEIPASS.
+_static_dir = PROJECT_ROOT / "rex" / "desktop" / "static"
+if _static_dir.is_dir():
+    datas.append((str(_static_dir), os.path.join("rex", "desktop", "static")))
 
 env_example = PROJECT_ROOT / ".env.example"
 if env_example.exists():
