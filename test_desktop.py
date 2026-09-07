@@ -191,6 +191,16 @@ def server_checks():
         check("no token denied (403)", code == 403)
         code, _ = get_status("/api/settings", tok="deadbeef")
         check("wrong token denied (403)", code == 403)
+
+        # regression (v0.3.3 republish fix): the static UI shell is served
+        # without the token — browsers fetch /, app.js, app.css as
+        # subresources that carry no ?t= query string; /api/* stays guarded
+        code, body = get_status("/")
+        check("index served without token (200)", code == 200 and "<!doctype html" in body.lower())
+        code, body = get_status("/app.css")
+        check("app.css served without token (200)", code == 200 and len(body) > 100)
+        code, _ = get_status("/api/state")
+        check("api/state without token still denied (403)", code == 403)
         code, body = get_status("/api/settings", tok=token)
         check("settings endpoint ok", code == 200 and json.loads(body).get("ok") is True)
         code, body = get_status("/api/providers", tok=token)

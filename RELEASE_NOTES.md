@@ -51,6 +51,15 @@ core yang sudah teruji — tanpa logika baru:
 
 ## 🔧 Perbaikan
 
+- **CRITICAL: static SPA 403 pada muat pertama** — di `do_GET`, pemeriksaan
+  token berjalan **sebelum** cabang aset statis. Browser memuat `app.js` /
+  `app.css` / `rex.svg` sebagai subresource dari `/` dan subresource tidak
+  membawa query `?t=` → semua 403 → jendela Rex Desktop kosong padahal
+  servernya hidup. Cabang statis kini dieksekusi tanpa token (guard
+  path-traversal `_serve_static` tetap); seluruh rute `/api/*` — termasuk
+  SSE `/api/events`, `send`, `approve`, rollback — tetap wajib token,
+  jadi jaringan lokal tetap tidak bisa mengendalikan agent. Regresi test
+  baru: `/` dan `/app.css` tanpa token → 200, `/api/state` tanpa token → 403
 - **CRITICAL: `rex/plugins.py` crash di Python ≤3.13** — `Optional` dipakai di
   signature `read_manifest`/`_manifest_meta`/`install_plugin_from_git` tanpa
   pernah diimpor. Di Python 3.14 (PEP 649) annotation dievaluasi lazy sehingga

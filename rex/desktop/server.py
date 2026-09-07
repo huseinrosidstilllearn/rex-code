@@ -5,7 +5,9 @@ Local UI host for Rex Desktop — the native-app front end.
 
 - stdlib only (ThreadingHTTPServer), bound to **127.0.0.1** on a free
   port, guarded by a per-launch random token (``?t=...``) so nothing on
-  the network can drive the agent.
+  the network can drive the agent. The static UI shell (``/``, ``*.js``,
+  ``*.css``, ``*.svg``) is served without the token — subresource fetches
+  carry no query string — while every ``/api/*`` route requires it.
 - ``GET /``            the SPA (static/index.html + app.js + app.css)
 - ``GET /api/events``  SSE stream of controller events (stream deltas,
   tool calls/results, mode changes, approval requests, agent state)
@@ -187,12 +189,18 @@ class DesktopHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         from urllib.parse import urlparse
         path = urlparse(self.path).path
-        if not self._authorized():
-            return self._deny()
+        # Static UI shell first, token-free: the browser loads app.js and
+        # app.css as subresources of /, and subresource requests carry no
+        # ?t= query string — guarding them with the token meant a 403 SPA
+        # on first load. These files hold no secrets, and _serve_static
+        # keeps its path-traversal guard. Every /api/* route below stays
+        # token-guarded: the token protects agent control, not markup.
         if path in ("/", "/index.html"):
             return self._serve_static("index.html")
         if path.endswith(".js") or path.endswith(".css") or path.endswith(".svg"):
             return self._serve_static(path.lstrip("/"))
+        if not self._authorized():
+            return self._deny()
         if path == "/api/state":
             controller = self.hub.controller
             pid, _, model = get_active_provider_info()
