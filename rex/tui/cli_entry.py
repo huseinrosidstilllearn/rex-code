@@ -3,9 +3,13 @@ rex.tui.cli_entry
 =================
 Console entry point for Rex Code (source CLI and PyInstaller-frozen exe).
 
-Supports:
-    rex            -> launch the Textual TUI
+Supports (delegates to the full cli.py dispatcher):
+    rex            -> launch Rex Desktop (the main frontend)
+    rex --tui/--cli -> interactive prompt_toolkit REPL
+    rex --web      -> Rex Desktop in a browser tab
+    rex -p ...     -> headless run
     rex --version  -> print version and exit (used to smoke-test frozen builds)
+    rex --tui-app  -> legacy Textual TUI (rex/tui/app.py)
 """
 
 import sys
@@ -24,9 +28,14 @@ def main() -> None:
     if any(a in ("--version", "-V") for a in args):
         print(f"Rex Code v{rex.__version__}")
         return
-    from rex.tui.app import main as tui_main
-
-    tui_main()
+    if "--tui-app" in args:
+        # Legacy native Textual TUI (kept for power users).
+        from rex.tui.app import main as tui_main
+        tui_main()
+        return
+    # Full dispatcher (desktop-first, prompt_toolkit REPL, headless, webhooks).
+    from cli import main as cli_main
+    cli_main()
 
 
 if __name__ == "__main__":

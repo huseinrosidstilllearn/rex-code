@@ -30,6 +30,8 @@ hiddenimports = [
     "rex.desktop.server",
     "rex.desktop.window",
     "rex.desktop.settings_api",
+    # Interactive CLI dispatcher (frozen exe entry delegates here)
+    "cli",
     # TUI
     "textual",
     "textual.app",
@@ -42,6 +44,11 @@ hiddenimports = [
     "textual.css",
     "textual.driver",
     "textual.worker",
+    # Interactive CLI (lazy-imported inside cli.py main loop)
+    "prompt_toolkit",
+    "prompt_toolkit.completion",
+    "prompt_toolkit.history",
+    "prompt_toolkit.formatted_text",
     # Config / validation
     "pydantic",
     "pydantic_core",

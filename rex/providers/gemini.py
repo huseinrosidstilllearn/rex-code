@@ -110,8 +110,22 @@ class GeminiProvider(BaseLLMProvider):
     def __init__(self, api_key: Optional[str] = None, model: str = "gemini-flash-latest"):
         self.api_key = api_key or os.getenv("GEMINI_API_KEY", "")
         self.model = model
-        self.client = genai.Client(api_key=self.api_key)
+        # Lazy client: constructing genai.Client with an empty key raises
+        # immediately, which used to crash RexAgent() on first run (no key
+        # configured yet). Defer to first actual use with a friendly error.
+        self._client = None
         self.chat_session = None
+
+    @property
+    def client(self):
+        if self._client is None:
+            if not self.api_key:
+                raise RuntimeError(
+                    "GEMINI_API_KEY belum diatur. Buka Settings (rex --web → "
+                    "Settings → Provider) atau isi .env, lalu coba lagi."
+                )
+            self._client = genai.Client(api_key=self.api_key)
+        return self._client
 
     def reset_session(self):
         self.chat_session = None
