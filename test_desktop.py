@@ -164,12 +164,27 @@ def server_checks():
     base = "http://127.0.0.1:" + str(port)
 
     def get_status(path, tok=None):
-        url = base + path + ("?t=" + tok if tok else "")
+        url = base + path
+        if tok:
+            url += ("&t=" + tok if "?" in path else "?t=" + tok)
         try:
             with urllib.request.urlopen(url, timeout=5) as resp:
                 return resp.status, resp.read().decode("utf-8")
         except urllib.error.HTTPError as exc:
             return exc.code, ""
+
+    def post_status(path, payload, tok=None):
+        req = urllib.request.Request(
+            base + path + ("?t=" + tok if tok else ""),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                return resp.status, resp.read().decode("utf-8")
+        except urllib.error.HTTPError as exc:
+            return exc.code, exc.read().decode("utf-8") if exc.fp else ""
 
     try:
         code, _ = get_status("/api/settings")
@@ -188,6 +203,73 @@ def server_checks():
         check("onboarding endpoint ok", code == 200 and json.loads(body).get("ok") is True)
         code, body = get_status("/api/files", tok=token)
         check("files endpoint ok", code == 200 and isinstance(json.loads(body).get("files"), list))
+
+        # ── desktop foundations endpoints (v0.3.3) ──────────────────
+        code, body = get_status("/api/checkpoints", tok=token)
+        payload = json.loads(body)
+        check("checkpoints endpoint ok", code == 200 and isinstance(payload.get("checkpoints"), list))
+
+        code, body = get_status("/api/todos", tok=token)
+        payload = json.loads(body)
+        check("todos endpoint ok", code == 200 and isinstance(payload.get("todos"), list)
+              and isinstance(payload.get("summary"), str))
+
+        code, body = get_status("/api/diff", tok=token)
+        check("diff endpoint ok", code == 200 and "diff" in json.loads(body))
+
+        code, body = get_status("/api/health", tok=token)
+        payload = json.loads(body)
+        check("health endpoint ok", code == 200 and isinstance(payload.get("results"), list)
+              and isinstance(payload.get("all_ok"), bool))
+
+        # export: mocked core (export_session writes files to disk — never in tests)
+        import rex.export as export_mod
+        orig_export = export_mod.export_session
+        export_mod.export_session = lambda sid, fmt="md", out_dir=None: f"OK: workspace/exports/rex-test-session.{fmt}"
+        try:
+            code, body = get_status("/api/export?fmt=md", tok=token)
+            payload = json.loads(body)
+            check("export endpoint contract", code == 200 and payload.get("ok") is True
+                  and "message" in payload)
+        finally:
+            export_mod.export_session = orig_export
+
+        code, body = get_status("/api/stats", tok=token)
+        check("stats endpoint ok", code == 200 and isinstance(json.loads(body).get("stats"), dict))
+
+        # rollback endpoints: input validation must never reach the workspace
+        code, body = post_status("/api/rewind", {"steps": "abc"}, tok=token)
+        check("rewind rejects non-numeric steps (400)", code == 400)
+        code, body = post_status("/api/rewind", {"steps": 0}, tok=token)
+        check("rewind rejects steps<1 (400)", code == 400)
+        code, body = post_status("/api/rewind", {"steps": 999}, tok=token)
+        check("rewind rejects steps>100 (400)", code == 400)
+
+        # rollback endpoints: mocked core (never mutates real checkpoints)
+        import rex.checkpoints as checkpoints_mod
+        orig_undo = checkpoints_mod.undo
+        orig_redo = checkpoints_mod.redo
+        orig_rewind = checkpoints_mod.rewind
+        checkpoints_mod.undo = lambda: {"previous": "abc1234", "saved": "def5678"}
+        checkpoints_mod.redo = lambda: {"restored": "def5678"}
+        checkpoints_mod.rewind = lambda steps=1: {"restored": "abc1234", "saved": "def5678", "steps": steps}
+        try:
+            code, body = post_status("/api/rewind", {"steps": 3}, tok=token)
+            payload = json.loads(body)
+            check("rewind ok + echoes steps", code == 200 and payload.get("ok") is True
+                  and payload.get("result", {}).get("steps") == 3)
+            code, body = post_status("/api/undo", {}, tok=token)
+            payload = json.loads(body)
+            check("undo ok + result contract", code == 200 and payload.get("ok") is True
+                  and "previous" in payload.get("result", {}))
+            code, body = post_status("/api/redo", {}, tok=token)
+            payload = json.loads(body)
+            check("redo ok + result contract", code == 200 and payload.get("ok") is True
+                  and "restored" in payload.get("result", {}))
+        finally:
+            checkpoints_mod.undo = orig_undo
+            checkpoints_mod.redo = orig_redo
+            checkpoints_mod.rewind = orig_rewind
 
         code, body = get_status("/", tok=token)
         check("index served", code == 200 and "<!doctype html" in body.lower())

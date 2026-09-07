@@ -17,6 +17,16 @@ Local UI host for Rex Desktop — the native-app front end.
 - Approval gate: the controller-side provider renders an
   ``approval_request`` event; ``POST /api/approve`` {decision, remember}
   resolves it.
+
+Desktop foundations (v0.3.3):
+- ``GET  /api/checkpoints``  timeline of workspace checkpoints
+- ``POST /api/rewind``       {steps} roll the workspace back N checkpoints
+- ``POST /api/undo`` / ``POST /api/redo``  one-step rollback / re-apply
+- ``GET  /api/todos``        agent todo board for the active session
+- ``GET  /api/diff``         workspace diff since the last checkpoint
+- ``GET  /api/health``       aggregated doctor/status signals
+- ``GET  /api/export?fmt=``  export the active session (md|html)
+- ``GET  /api/stats``        token/cost stats snapshot
 """
 
 from __future__ import annotations
@@ -230,6 +240,43 @@ class DesktopHandler(BaseHTTPRequestHandler):
         if path == "/api/onboarding":
             from rex.desktop.settings_api import onboarding_status
             return self._json(onboarding_status())
+        if path == "/api/checkpoints":
+            from rex.checkpoints import list_checkpoints
+            try:
+                items = list_checkpoints(limit=20)
+            except Exception as exc:  # noqa: BLE001 — snapshot views never raise
+                return self._json({"ok": False, "error": str(exc), "checkpoints": []})
+            return self._json({"ok": True, "checkpoints": items})
+        if path == "/api/todos":
+            from rex.todos import get as get_todos, summary
+            try:
+                board = get_todos(self.hub.controller.session_id)
+                payload = {"ok": True, "summary": summary(board), "todos": board}
+            except Exception as exc:  # noqa: BLE001 — board view never raises
+                payload = {"ok": False, "error": str(exc), "summary": "", "todos": []}
+            return self._json(payload)
+        if path == "/api/diff":
+            from rex.review import session_diff
+            try:
+                payload = {"ok": True, "diff": session_diff()}
+            except Exception as exc:  # noqa: BLE001 — diff view never raises
+                payload = {"ok": False, "error": str(exc), "diff": ""}
+            return self._json(payload)
+        if path == "/api/health":
+            return self._json(_health_snapshot())
+        if path == "/api/export":
+            from urllib.parse import parse_qs, urlparse
+            fmt = (parse_qs(urlparse(self.path).query).get("fmt") or ["md"])[0].strip().lower().lstrip(".")
+            if fmt not in ("md", "html"):
+                fmt = "md"
+            return self._json(_export_snapshot(self.hub.controller, fmt))
+        if path == "/api/stats":
+            from rex.stats import collect_stats
+            try:
+                payload = {"ok": True, "stats": collect_stats(limit=50)}
+            except Exception as exc:  # noqa: BLE001 — stats view never raises
+                payload = {"ok": False, "error": str(exc), "stats": {}}
+            return self._json(payload)
         self.send_error(404)
 
     def _stream_events(self) -> None:
@@ -316,6 +363,33 @@ class DesktopHandler(BaseHTTPRequestHandler):
         if path == "/api/onboarding":
             from rex.desktop.settings_api import onboarding_complete
             return self._json(onboarding_complete(body))
+        if path == "/api/rewind":
+            from rex.checkpoints import rewind as cp_rewind
+            try:
+                steps = int(body.get("steps", 1))
+            except (TypeError, ValueError):
+                return self._json({"ok": False, "error": "steps harus angka bulat >= 1"}, 400)
+            if steps < 1 or steps > 100:
+                return self._json({"ok": False, "error": "steps harus di antara 1 dan 100"}, 400)
+            result = cp_rewind(steps)  # None → not enough history (not an error)
+            if result is None:
+                return self._json({"ok": False, "error": "Tidak ada cukup checkpoint untuk rewind."})
+            self.hub.emit({"type": "checkpoint_rolled", "action": "rewind", **result})
+            return self._json({"ok": True, "result": result})
+        if path == "/api/undo":
+            from rex.checkpoints import undo as cp_undo
+            result = cp_undo()
+            if result is None:
+                return self._json({"ok": False, "error": "Tidak ada yang bisa di-undo."})
+            self.hub.emit({"type": "checkpoint_rolled", "action": "undo", **result})
+            return self._json({"ok": True, "result": result})
+        if path == "/api/redo":
+            from rex.checkpoints import redo as cp_redo
+            result = cp_redo()
+            if result is None:
+                return self._json({"ok": False, "error": "Tidak ada yang bisa di-redo."})
+            self.hub.emit({"type": "checkpoint_rolled", "action": "redo", **result})
+            return self._json({"ok": True, "result": result})
         if path.startswith("/api/providers/") and path.endswith("/test"):
             pid = path[len("/api/providers/"):-len("/test")]
             from rex.desktop.settings_api import provider_test
@@ -326,6 +400,35 @@ class DesktopHandler(BaseHTTPRequestHandler):
 def _version() -> str:
     import rex
     return rex.__version__
+
+
+def _health_snapshot() -> dict:
+    """Aggregated health view for the desktop app. Never raises."""
+    from rex.status import collect_status
+    try:
+        data = collect_status()
+    except Exception as exc:  # noqa: BLE001 — health view never raises
+        return {"ok": False, "error": str(exc), "results": [], "all_ok": False}
+    results = list(data.get("results") or [])
+    return {
+        "ok": True,
+        "results": results,
+        "all_ok": all(r.get("ok") for r in results) if results else False,
+    }
+
+
+def _export_snapshot(controller, fmt: str) -> dict:
+    """Export the active session; returns a JSON envelope (never raises)."""
+    from rex.export import export_session
+    session_id = getattr(controller, "session_id", None)
+    if not session_id:
+        return {"ok": False, "error": "Belum ada sesi aktif untuk diekspor.", "path": None}
+    try:
+        result_line = export_session(session_id, fmt)
+    except Exception as exc:  # noqa: BLE001 — export view never raises
+        return {"ok": False, "error": str(exc), "path": None}
+    ok = not str(result_line).lower().startswith("error")
+    return {"ok": ok, "message": str(result_line), "path": str(result_line) if ok else None}
 
 
 def _usage_snapshot(controller) -> dict:
