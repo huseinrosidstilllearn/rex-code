@@ -1,7 +1,7 @@
-; Inno Setup script — Rex Code Windows installer
+﻿; Inno Setup script â€” Rex Code Windows installer
 ;
 ; Compile with the ISCC shipped with Inno Setup 6:
-;     iscc installer\windows\rexcode.iss /DAppVersion=0.3.1
+;     iscc installer\\windows\\rexcode.iss /DAppVersion=0.3.2
 ;
 ; Version is passed on the command line (single source of truth:
 ; rex/__init__.py __version__). The build script does this automatically.
@@ -9,7 +9,7 @@
 #define AppName "Rex Code"
 #define AppExeName "rex.exe"
 #ifndef AppVersion
-#define AppVersion "0.3.1"
+#define AppVersion "0.3.2"
 #endif
 
 [Setup]
@@ -68,7 +68,7 @@ Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Comment: "Launch {#
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Comment: "Launch {#AppName}"; Tasks: desktopicon
 
-; 'Open Rex Code here' — directory background + right-click on a folder
+; 'Open Rex Code here' â€” directory background + right-click on a folder
 ; NOTE: Inno escapes embedded quotes by DOUBLING them ("" not \")
 [Registry]
 Root: HKCU; Subkey: "Software\Classes\Directory\shell\OpenRexCode"; \
