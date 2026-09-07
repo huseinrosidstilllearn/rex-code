@@ -53,6 +53,11 @@ def _schema_for_callable(func: Callable) -> dict:
     return {"type": "object", "properties": properties, "required": required}
 
 
+def _args_to_dict(signature: inspect.Signature, args) -> dict:
+    """Map positional args onto parameter names using the tool signature."""
+    return {pname: value for (pname, _), value in zip(signature.parameters.items(), args)}
+
+
 def _build_wrapped_tool(name: str, func: Callable, on_tool_callback, max_chars: int) -> Callable:
     """
     Wrap a tool handler so the Gemini SDK sees a proper typed signature,
@@ -78,6 +83,19 @@ def _build_wrapped_tool(name: str, func: Callable, on_tool_callback, max_chars: 
                 key: (value[:500] + f"... ({len(value)} chars)") if isinstance(value, str) and len(value) > 500 else value
                 for key, value in callback_args.items()
             })
+        # Wasted-repeat guard: identical calls (name+args) executed several
+        # times in a row get replaced by a strategy-change warning instead
+        # of running the (identical) tool again.
+        from rex.agentguard import active_guard
+        guard = active_guard()
+        guard_warning = None
+        if guard is not None:
+            try:
+                guard_warning = guard.observe(name, {**_args_to_dict(signature, args), **dict(kwargs)})
+            except Exception:
+                guard_warning = None
+        if guard_warning:
+            return guard_warning
         result = str(func(*args, **kwargs))
         if len(result) > max_chars:
             result = result[: max(0, max_chars - 14)] + "\n...[dipotong]"
@@ -142,12 +160,18 @@ class GeminiProvider(BaseLLMProvider):
             for name, func in effective_tool_registry().items()
         ]
 
+        # Cap the native AFC tool loop at the configured agent step limit
+        # (SDK default is only 10 remote calls, below Rex's max_steps).
+        max_steps = max(1, int(load_config().get("max_steps", 25)))
+        afc = types.AutomaticFunctionCallingConfig(maximum_remote_calls=max_steps)
+
         self.chat_session = self.client.chats.create(
             model=self.model,
             history=history or [],
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 tools=tools,
+                automatic_function_calling=afc,
                 temperature=0.2
             )
         )

@@ -25,6 +25,7 @@ from rex.compaction import maybe_compact
 from rex.vision import extract_references, build_gemini_message
 from rex import todos as _todos
 from rex.usage import UsageMeter
+from rex.agentguard import activate_guard, deactivate_guard, active_guard
 
 class StepEvent:
     def __init__(self, event_type: str, data: Any):
@@ -162,6 +163,22 @@ class RexAgent:
         # Persist into the session record for /stats (never raises).
         if self.session_id:
             session_store.add_usage(self.session_id, usage)
+
+    def _guard_observe(self, func_name: str, args: Dict[str, Any]) -> Optional[str]:
+        """
+        Consult the active tool-call guard (wasted-repeat detection).
+
+        Returns the guard's warning string when this exact call is a wasted
+        identical repeat (caller must use it as the tool result instead of
+        executing the tool), else None.
+        """
+        try:
+            guard = active_guard()
+            if guard is None:
+                return None
+            return guard.observe(func_name, args)
+        except Exception:
+            return None  # guard must never break the agent loop
 
     def _advance_provider(self) -> bool:
         """Move to the next provider in the fallback chain. False = exhausted."""
@@ -315,10 +332,14 @@ class RexAgent:
                     log.info("tool_call name=%s session=%s", func_name, self.session_id or "none")
 
                     if func_name in tools_registry:
-                        try:
-                            result = tools_registry[func_name](**args)
-                        except Exception as e:
-                            result = f"Exception saat eksekusi {func_name}: {str(e)}"
+                        guard_warning = self._guard_observe(func_name, args)
+                        if guard_warning:
+                            result = guard_warning
+                        else:
+                            try:
+                                result = tools_registry[func_name](**args)
+                            except Exception as e:
+                                result = f"Exception saat eksekusi {func_name}: {str(e)}"
                     else:
                         result = f"Error: Tool '{func_name}' tidak terdaftar."
 
@@ -345,9 +366,32 @@ class RexAgent:
                 break
 
         if not final_response:
-            final_response = f"Proses dihentikan setelah mencapai batas {max_steps} langkah. Persempit tugas atau naikkan max_steps."
+            summary = self._step_limit_summary()
+            final_response = (
+                f"Proses dihentikan setelah mencapai batas {max_steps} langkah.\n{summary}\n"
+                "Persempit tugas, gunakan todo_write untuk memecah pekerjaan, atau naikkan max_steps."
+            )
+            if on_step:
+                on_step(StepEvent("step_limit", {"max_steps": max_steps, "summary": summary}))
             self._remember({"role": "assistant", "content": final_response})
         return final_response
+
+    def _step_limit_summary(self) -> str:
+        """One-line recap of what the agent did before hitting the limit."""
+        tools_used = []
+        for message in self.messages:
+            if message.get("role") == "assistant" and isinstance(message.get("tool_calls"), list):
+                for tc in message["tool_calls"]:
+                    name = (tc or {}).get("name")
+                    if name:
+                        tools_used.append(name)
+        if not tools_used:
+            return "Belum ada tool yang dijalankan."
+        counts: Dict[str, int] = {}
+        for name in tools_used:
+            counts[name] = counts.get(name, 0) + 1
+        parts = [f"{name}×{count}" if count > 1 else name for name, count in counts.items()]
+        return f"Progress sejauh ini: {', '.join(parts)}."
 
     def run(self, user_input: str, on_step: Optional[Callable[[StepEvent], None]] = None) -> str:
         """
@@ -357,6 +401,16 @@ class RexAgent:
         self._abort.clear()
         self._user_persisted_this_run = False
         self.usage.refresh_config()
+        # Activate the wasted-repeat guard for this whole run (covers all
+        # provider attempts; sub-agents get their own isolated guard via
+        # ContextVar semantics).
+        _guard, _guard_token = activate_guard()
+        try:
+            return self._run_inner(user_input, on_step, cfg)
+        finally:
+            deactivate_guard(_guard_token)
+
+    def _run_inner(self, user_input: str, on_step: Optional[Callable[[StepEvent], None]], cfg: dict) -> str:
         # Budget guard, hard stop: an exhausted token budget refuses the
         # whole round before any provider call (warning fires post-round).
         if self.usage.status() == "exceeded":

@@ -1,0 +1,147 @@
+"""Self-check agent loop hygiene: wasted-repeat guard + step limits.
+Suite #43. Run: python test_agentguard.py"""
+
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+from rex.providers.base import LLMResponse
+from rex.sessions import SessionStore
+
+
+class ScriptedProvider:
+    """Router-style provider replaying a scripted sequence of responses."""
+
+    def __init__(self, script):
+        self.script = list(script)
+        self.messages = []
+
+    def chat(self, messages, system_prompt, tools=None):
+        self.messages.append([dict(m) for m in messages])
+        item = self.script.pop(0)
+        if callable(item):
+            return item()
+        return item
+
+
+def check(name, condition):
+    print(f"[{'PASS' if condition else 'FAIL'}] {name}")
+    if not condition:
+        raise AssertionError(name)
+
+
+CFG = {
+    "stream_enabled": False, "anti_slop_enabled": False,
+    "max_steps": 25, "max_history_messages": 40,
+}
+
+
+def main():
+    # ── 1. Guard: identical tool calls get replaced by a warning ──────
+    from rex.agentguard import ToolCallGuard, activate_guard, deactivate_guard, active_guard
+
+    g = ToolCallGuard(threshold=3)
+    r1 = g.observe("read_file", {"path": "a.txt"})
+    r2 = g.observe("read_file", {"path": "a.txt"})
+    r3 = g.observe("read_file", {"path": "a.txt"})
+    r4 = g.observe("read_file", {"path": "a.txt"})
+    check("first two identical calls pass", r1 is None and r2 is None)
+    check("third identical call warned", r3 is not None and "GUARD" in r3)
+    check("counter resets -> next retry allowed", r4 is None)
+    check("different args never warned", g.observe("read_file", {"path": "b.txt"}) is None)
+    check("blocked counter tracked", g.blocked == 1)
+    ge = ToolCallGuard(threshold=2)
+    check("run_command exempt from guard", all(ge.observe("run_command", {"command": "pytest"}) is None for _ in range(5)))
+    check("task_output exempt from guard", ge.observe("task_output", {"id": "t1"}) is None)
+
+    # ── 2. ContextVar isolation for nested agents ─────────────────────
+    outer, token = activate_guard()
+    try:
+        inner, inner_token = activate_guard()
+        try:
+            check("nested guard installed", active_guard() is inner and active_guard() is not outer)
+        finally:
+            deactivate_guard(inner_token)
+        check("outer guard restored", active_guard() is outer)
+    finally:
+        deactivate_guard(token)
+    check("no guard outside run()", active_guard() is None)
+
+    # ── 3. Router loop consults the guard ────────────────────────────
+    from rex.core import RexAgent
+    import rex.core as core_mod
+
+    calls = []
+
+    def list_dir():
+        calls.append(1)
+        return "item"
+
+    script = [
+        {"id": "c1", "name": "probe_tool", "args": {}},
+        {"id": "c2", "name": "probe_tool", "args": {}},
+        {"id": "c3", "name": "probe_tool", "args": {}},
+        {"id": "c4", "name": "probe_tool", "args": {}},
+        LLMResponse(content="selesai"),
+    ]
+    script = [LLMResponse(tool_calls=[item]) if isinstance(item, dict) else item for item in script]
+    provider = ScriptedProvider(script)
+
+    def fake_effective_registry():
+        return {"probe_tool": lambda: calls.append(1) or "hasil"}
+
+    def fake_effective_definitions():
+        return []
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        store = SessionStore(Path(temp_dir))
+        sid = store.create("guard", "mock")["id"]
+        with patch("rex.core.session_store", store), \
+             patch("rex.core.get_llm_provider_with_fallback", return_value=(provider, [None])), \
+             patch("rex.core.load_config", return_value=dict(CFG)), \
+             patch("rex.core.build_context_prefix", return_value=""), \
+             patch("rex.core.maybe_compact", return_value=(None, False)), \
+             patch("rex.core.effective_tool_definitions", side_effect=fake_effective_definitions), \
+             patch("rex.core.effective_tool_registry", side_effect=fake_effective_registry):
+            agent = RexAgent(sid)
+            out = agent.run("loop test")
+        check("run completes after guard nudge", "selesai" in out)
+        # Sequence: exec(1) exec(2) -> 3rd identical replaced by GUARD warning
+        # -> 4th executes again (counter reset allows a legitimate retry,
+        # e.g. re-reading after an edit). So exactly 3 real executions.
+        check("guard blocked the wasted 3rd identical call", len(calls) == 3)
+        check(
+            "provider saw the guard warning",
+            any(m.get("role") == "tool" and "GUARD" in str(m.get("content")) for m in agent.messages),
+        )
+
+    # ── 4. Step limit emits a step_limit StepEvent + useful summary ───
+    events = []
+
+    def on_step(event):
+        events.append(event)
+
+    loop_script = [LLMResponse(tool_calls=[{"id": "l", "name": "probe_tool", "args": {}}]) for _ in range(30)]
+    loop_provider = ScriptedProvider(loop_script + [LLMResponse(content="tidak sampai sini")])
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        store = SessionStore(Path(temp_dir))
+        sid = store.create("limit", "mock")["id"]
+        with patch("rex.core.session_store", store), \
+             patch("rex.core.get_llm_provider_with_fallback", return_value=(loop_provider, [None])), \
+             patch("rex.core.load_config", return_value=dict(CFG, max_steps=3)), \
+             patch("rex.core.build_context_prefix", return_value=""), \
+             patch("rex.core.maybe_compact", return_value=(None, False)), \
+             patch("rex.core.effective_tool_definitions", side_effect=fake_effective_definitions), \
+             patch("rex.core.effective_tool_registry", side_effect=fake_effective_registry):
+            out = RexAgent(sid).run("batas langkah", on_step=on_step)
+        check("step limit returns useful response", "batas" in out.lower())
+        kinds = [e.event_type for e in events]
+        check("step_limit event fired", "step_limit" in kinds)
+        check("step limit summary lists tools", "probe_tool" in out)
+
+    print("\nAgentic guard checks ALL PASS")
+
+
+if __name__ == "__main__":
+    main()

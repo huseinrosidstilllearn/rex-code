@@ -54,21 +54,69 @@ def _target(path: str) -> Optional[Path]:
 def _is_sensitive(target: Optional[Path]) -> bool:
     return target is None or target.name.lower() in SENSITIVE_FILENAMES or target.suffix.lower() in SENSITIVE_SUFFIXES
 
-def read_file(path: str) -> str:
-    """Membaca isi file di dalam workspace."""
+def read_file(path: str, offset: int = 0, limit: int = 0) -> str:
+    """Membaca isi file di dalam workspace.
+    offset/limit opsional (1-based baris; limit=0 = semua baris,
+    dibatasi file_read_max_chars). offset negatif = N baris terakhir."""
     target = _target(path)
     if _is_sensitive(target):
         return "DIBLOKIR KEAMANAN: path di luar workspace atau file sensitif."
     if not target.exists():
         return f"Error: File '{path}' tidak ditemukan."
     try:
-        limit = max(100, int(load_config().get("file_read_max_chars", 20000)))
+        max_chars = max(100, int(load_config().get("file_read_max_chars", 20000)))
         with open(target, "rb") as raw:
             if b"\x00" in raw.read(1024):
                 return "DIBLOKIR KEAMANAN: file biner tidak dapat dibaca."
         with open(target, "r", encoding="utf-8") as f:
-            content = f.read(limit + 1)
-        return _truncate_output(content, limit)
+            content = f.read()
+        lines = content.split("\n")
+        total_lines = len(lines)
+        try:
+            offset_i = int(offset or 0)
+            limit_i = int(limit or 0)
+        except (TypeError, ValueError):
+            offset_i, limit_i = 0, 0
+        # Negative offset = tail read (last N lines).
+        if offset_i < 0:
+            start = max(0, total_lines + offset_i)
+        else:
+            start = max(0, offset_i - 1)
+        if start >= total_lines:
+            return f"Error: offset {offset_i} melebihi jumlah baris file ({total_lines})."
+        end = total_lines if limit_i <= 0 else min(total_lines, start + limit_i)
+        window_lines = lines[start:end]
+
+        # Char budget: keep only whole lines that fit.
+        char_truncated = False
+        if sum(len(ln) + 1 for ln in window_lines) > max_chars:
+            char_truncated = True
+            kept = []
+            used = 0
+            for ln in window_lines:
+                if used + len(ln) + 1 > max_chars and kept:
+                    break
+                if len(ln) + 1 > max_chars and not kept:
+                    # Single line longer than the whole budget.
+                    kept = [ln[: max(0, max_chars - 14)] + "\n...[dipotong]"]
+                    break
+                kept.append(ln)
+                used += len(ln) + 1
+            window_lines = kept
+        window = "\n".join(window_lines)
+
+        shown = len(window_lines)
+        header = ""
+        if start > 0:
+            header = f"[Menampilkan baris {start + 1}-{start + shown} dari {total_lines}]\n"
+        remaining = total_lines - (start + shown)
+        footer = ""
+        if remaining > 0:
+            if char_truncated:
+                footer = f"\n\n[OUTPUT DIPOTONG — {remaining} baris lagi belum terbaca. Lanjutkan: read_file('{path}', offset={start + shown + 1})]"
+            else:
+                footer = f"\n\n[{remaining} baris lagi belum terbaca. Lanjutkan: read_file('{path}', offset={start + shown + 1})]"
+        return header + window + footer
     except Exception as e:
         return f"Error saat membaca file: {str(e)}"
 
@@ -752,11 +800,13 @@ def todo_write(todos: list) -> str:
 TOOL_DEFINITIONS = [
     {
         "name": "read_file",
-        "description": "Membaca isi file di workspace.",
+        "description": "Membaca isi file di workspace. Gunakan offset/limit untuk file besar (membaca jendela baris tertentu), atau offset negatif untuk membaca baris terakhir (mis. -50 = 50 baris terakhir).",
         "parameters": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Nama atau path relatif file (misal: app.py, index.html)"}
+                "path": {"type": "string", "description": "Nama atau path relatif file (misal: app.py, index.html)"},
+                "offset": {"type": "integer", "description": "Baris mulai baca (1-based). Negatif = baca N baris terakhir. 0/default = dari awal."},
+                "limit": {"type": "integer", "description": "Jumlah maksimum baris yang dibaca. 0/default = tanpa batas baris."}
             },
             "required": ["path"]
         }
