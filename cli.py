@@ -13,6 +13,13 @@ from pathlib import Path
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# Force UTF-8 on Windows consoles/pipes (banner + emoji otherwise hit cp1252).
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, OSError):
+        pass
+
 import rex
 from rex import __version__
 from rex.approval import request_approval, reset_session_allows, set_provider, summarize_action
@@ -161,7 +168,7 @@ def handle_models_switch():
         cfg["active_model"] = avail[0]
 
     save_config(cfg)
-    console.print(f"[bold green]âœ“ Provider aktif diubah ke: {choice} ({cfg['active_model']})[/bold green]")
+    console.print(f"[bold green]✓ Provider aktif diubah ke: {choice} ({cfg['active_model']})[/bold green]")
 
 def handle_settings():
     cfg = load_config()
@@ -214,14 +221,14 @@ def handle_settings():
             v = Prompt.ask("Perlu konfirmasi untuk tiap aksi BUILD? (disarankan aktif)", choices=["true", "false"], default=str(appr.get("enabled", False)).lower())
             appr["enabled"] = v == "true"
     save_config(cfg)
-    console.print(f"[bold green]âœ“ Settings disimpan.[/bold green]")
+    console.print(f"[bold green]✓ Settings disimpan.[/bold green]")
 
 
 def handle_anti_slop_audit():
     text = Prompt.ask("Masukkan teks atau kalimat yang ingin diaudit dari AI-Slop")
     findings = detect_slop(text)
     if not findings:
-        console.print("[bold green]âœ“ Teks bersih! Tidak ditemukan kata klise atau AI slop.[/bold green]")
+        console.print("[bold green]✓ Teks bersih! Tidak ditemukan kata klise atau AI slop.[/bold green]")
     else:
         console.print(f"[bold yellow]Ditemukan {len(findings)} indikasi AI Slop:[/bold yellow]")
         for f in findings:
@@ -358,7 +365,7 @@ def handle_scheduler():
     if choice.strip():
         try:
             res = scheduler.trigger_job(choice.strip())
-            console.print(f"[bold green]âœ“ Job '{choice.strip()}' di-trigger.[/bold green]")
+            console.print(f"[bold green]✓ Job '{choice.strip()}' di-trigger.[/bold green]")
             if res.get("output"):
                 console.print(Panel(str(res.get("output")), title="Output", border_style="dim green"))
         except Exception as exc:
@@ -409,6 +416,52 @@ def check_updates_background():
     return thread, notices
 
 
+# ── prompt_toolkit REPL core (Fase D) ───────────────────────────
+SLASH_COMMANDS = [
+    "/help", "/exit", "/quit", "/plan", "/build", "/models", "/provider",
+    "/anti-slop", "/settings", "/cost", "/init", "/commit", "/ask ",
+    "/imports", "/pr", "/stats", "/diff", "/doctor", "/test",
+    "/checkpoints", "/undo", "/redo", "/scheduler", "/n8n", "/files",
+    "/sessions", "/new", "/reset", "/voice", "/use ", "/delete ",
+]
+
+
+def decide_frontend(args) -> str:
+    """Pure dispatcher: which UI should `rex` start?
+    Returns 'desktop' | 'tui' | 'web' | 'headless' | 'webhook'.
+    """
+    if getattr(args, "serve_webhook", False):
+        return "webhook"
+    if getattr(args, "prompt", None) is not None:
+        return "headless"
+    if getattr(args, "web", False):
+        return "web"
+    if getattr(args, "tui", False) or getattr(args, "cli", False):
+        return "tui"
+    return "desktop"
+
+
+def _repl_completer():
+    from prompt_toolkit.completion import WordCompleter
+    return WordCompleter(SLASH_COMMANDS, ignore_case=True, match_middle=False)
+
+
+def _repl_history():
+    from prompt_toolkit.history import FileHistory
+    from rex.config import DATA_DIR
+    return FileHistory(str(DATA_DIR / "cli_history"))
+
+
+def _prompt_session():
+    from prompt_toolkit import PromptSession
+    try:
+        session = PromptSession(history=_repl_history(), completer=_repl_completer())
+    except Exception:
+        # No usable console (piped/redirected stdout) -> plain-input fallback.
+        return None
+    return session
+
+
 def main():
     parser = argparse.ArgumentParser(prog="rex", description="Rex Code — AI coding agent di terminal")
     parser.add_argument("-p", "--prompt", help="Jalankan satu prompt non-interaktif (headless) lalu keluar")
@@ -425,18 +478,20 @@ def main():
     parser.add_argument("--version", action="version", version=f"Rex Code v{__version__}")
     args = parser.parse_args()
 
-    if args.serve_webhook:
+    frontend = decide_frontend(args)
+
+    if frontend == "webhook":
         from rex.webhost import run_webhost
         run_webhost()
         return
 
     # Desktop-first dispatch: no args (interactive) → Rex Desktop window.
-    if args.prompt is None and not (args.tui or args.cli or args.web):
+    if frontend == "desktop":
         from rex.desktop.server import serve as serve_desktop
         serve_desktop(open_window=True)
         return
 
-    if args.web:
+    if frontend == "web":
         from rex.desktop.server import serve as serve_desktop
         serve_desktop(open_window=True, browser=True)
         return
@@ -472,6 +527,18 @@ def main():
         for line in pending.splitlines()[:14]:
             console.print(f"[dim]  {line}[/dim]")
 
+    pt_session = None
+    try:
+        pt_session = _prompt_session()
+        from prompt_toolkit.formatted_text import ANSI as _PT_ANSI
+    except ImportError:
+        pt_session = None  # graceful fallback to plain input()
+        _PT_ANSI = None
+    # Dedicated console for rendering the prompt in ANSI (prompt_toolkit
+    # understands ANSI escape sequences via formatted_text.ANSI).
+    from rich.console import Console as _Console
+    ansi_console = _Console(force_terminal=True)
+
     while True:
         mode = get_active_mode().upper()
         mode_style = "bold blue" if mode == "PLAN" else "bold green"
@@ -480,7 +547,12 @@ def main():
         prompt_text = Text.from_markup(f"\n[{mode_style}][Rex Code | {mode} | {model}][/{mode_style}] > ")
 
         try:
-            user_input = console.input(prompt_text).strip()
+            if pt_session is not None:
+                with ansi_console.capture() as cap:
+                    ansi_console.print(prompt_text, end="")
+                user_input = pt_session.prompt(_PT_ANSI(cap.get())).strip()
+            else:
+                user_input = console.input(prompt_text).strip()
         except (KeyboardInterrupt, EOFError):
             console.print("\n[dim]Sampai jumpa![/dim]")
             break
@@ -617,7 +689,7 @@ def main():
             continue
         elif user_input == "/n8n":
             wf_path = create_webhook_ai_workflow(name="Otomasi_Baru")
-            console.print(f"[bold green]âœ“ Template workflow n8n berhasil dibuat:[/bold green] [cyan]{wf_path}[/cyan]")
+            console.print(f"[bold green]✓ Template workflow n8n berhasil dibuat:[/bold green] [cyan]{wf_path}[/cyan]")
             console.print("[dim]Anda bisa langsung mengimport file JSON tersebut ke dashboard n8n Anda.[/dim]")
             continue
         elif user_input == "/files":

@@ -17,6 +17,9 @@ httpx==0.28.1
 # Native TUI (Claude-Code-style terminal app)
 textual==0.86.3
 
+# Interactive CLI (history, autocomplete, proper Windows unicode)
+prompt_toolkit==3.0.53
+
 # IANA timezone database (zoneinfo) — required on Windows, optional elsewhere
 tzdata==2026.3
 

@@ -48,6 +48,7 @@ CHECKS = [
     "test_skills.py",
     "test_app_controller.py",
     "test_desktop.py",
+    "test_cli_ui.py",
 ]
 
 
