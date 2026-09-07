@@ -1,11 +1,19 @@
-"""Run every project self-check. Usage: python run_all_checks.py"""
+"""Run every project self-check. Usage: python run_all_checks.py
+
+Hardened runner:
+- every suite gets a hard timeout (a hang can no longer wedge the run),
+- all suites execute even when one fails (full picture, not just first error),
+- a failure summary + non-zero exit code at the end (CI gate friendly).
+"""
 
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
+TIMEOUT_SEC = 300  # per-suite cap; full local run is ~2 min for all 43
 CHECKS = [
     "test_foundations.py",
     "test_streaming.py",
@@ -53,14 +61,36 @@ CHECKS = [
 ]
 
 
-def main():
+def main() -> int:
+    failures: list[tuple[str, str]] = []
     for check in CHECKS:
         print(f"\n=== {check} ===", flush=True)
-        result = subprocess.run([sys.executable, str(ROOT / check)], cwd=ROOT)
+        started = time.monotonic()
+        try:
+            result = subprocess.run(
+                [sys.executable, str(ROOT / check)],
+                cwd=ROOT,
+                timeout=TIMEOUT_SEC,
+            )
+        except subprocess.TimeoutExpired:
+            print(f"!! {check} TIMED OUT after {TIMEOUT_SEC}s — treated as failure", flush=True)
+            failures.append((check, f"timeout after {TIMEOUT_SEC}s"))
+            continue
+        elapsed = time.monotonic() - started
         if result.returncode:
-            raise SystemExit(result.returncode)
+            print(f"!! {check} FAILED (exit {result.returncode}) after {elapsed:.1f}s", flush=True)
+            failures.append((check, f"exit code {result.returncode}"))
+        else:
+            print(f"ok {check} — {elapsed:.1f}s", flush=True)
+
+    if failures:
+        print(f"\n{len(failures)}/{len(CHECKS)} suite(s) FAILED:", flush=True)
+        for name, why in failures:
+            print(f"  - {name}: {why}", flush=True)
+        return 1
     print(f"\nAll {len(CHECKS)} check suites PASS")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -13,6 +13,9 @@ workspace/
 # anchored to root so .github/workflows/ stays tracked
 /workflows/
 
+# Local assistant/tool state (not part of the product)
+.zcode/
+
 # Packaging outputs (spec/iss/scripts stay tracked under installer/)
 build/
 dist/
