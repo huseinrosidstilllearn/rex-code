@@ -289,6 +289,22 @@ async function paintProvidersTab(body) {
     if (!p.has_key) left.appendChild(el("div", "p-missing", "API key belum diisi"));
     card.appendChild(left);
     const right = el("div");
+    const edit = el("button", "primary ghost", "Edit");
+    edit.onclick = () => paintProviderEditor(body, p.id);
+    right.appendChild(edit);
+    if (p.id !== state.activeProvider) {
+      const use = el("button", "primary", "Jadikan aktif");
+      use.style.marginLeft = "8px";
+      use.onclick = async () => {
+        await post("/api/providers", { action: "activate", id: p.id });
+        paintProvidersTab(body);
+      };
+      right.appendChild(use);
+    }
+    card.appendChild(right);
+    body.appendChild(card);
+  });
+}
 
 async function paintProviderEditor(body, pid) {
   const p = state.providers.find((x) => x.id === pid);
@@ -343,6 +359,11 @@ async function paintProviderEditor(body, pid) {
     if (r.ok) paintProvidersTab(body);
     else { result.className = "test-result bad"; result.textContent = r.error || "gagal menyimpan"; }
   };
+  actions.appendChild(test); actions.appendChild(save);
+  editor.appendChild(actions);
+  editor.appendChild(result);
+  body.appendChild(editor);
+}
 
 async function paintGeneralTab(body) {
   const data = await api("/api/settings");
@@ -416,26 +437,3 @@ async function boot() {
   $("input").addEventListener("keydown", handleInputKeydown);
 }
 boot();
-
-  actions.appendChild(test); actions.appendChild(save);
-  editor.appendChild(actions);
-  editor.appendChild(result);
-  body.appendChild(editor);
-}
-
-    const edit = el("button", "primary ghost", "Edit");
-    edit.onclick = () => paintProviderEditor(body, p.id);
-    right.appendChild(edit);
-    if (p.id !== state.activeProvider) {
-      const use = el("button", "primary", "Jadikan aktif");
-      use.style.marginLeft = "8px";
-      use.onclick = async () => {
-        await post("/api/providers", { action: "activate", id: p.id });
-        paintProvidersTab(body);
-      };
-      right.appendChild(use);
-    }
-    card.appendChild(right);
-    body.appendChild(card);
-  });
-}
